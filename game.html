@@ -230,6 +230,24 @@
             border-radius: 5px;
             cursor: pointer;
         }
+
+        /* 컨트롤러 URL */
+        #controllerUrl {
+            width: 100%;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0,100,255,0.3);
+            border: 1px solid #007bff;
+            border-radius: 10px;
+            color: white;
+            font-size: 11px;
+            text-align: center;
+            word-break: break-all;
+        }
+        #controllerUrl a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
@@ -261,6 +279,11 @@
             <div><span>목표 거리:</span><span id="goalDist">1000m</span></div>
             <div><span>진행률:</span><span id="progress">0%</span></div>
             <div><span>예상 시간:</span><span id="eta">--:--</span></div>
+        </div>
+
+        <div id="controllerUrl">
+            📱 폰 컨트롤러:<br>
+            <a id="sensorUrl" href="#" target="_blank"></a>
         </div>
     </div>
 
@@ -578,6 +601,12 @@
 
             requestAnimationFrame(gameLoop);
         }
+
+        // 컨트롤러 URL 표시
+        const sensorUrlLink = document.getElementById('sensorUrl');
+        const controllerUrl = `${location.origin}/sensor.html`;
+        sensorUrlLink.href = controllerUrl;
+        sensorUrlLink.textContent = controllerUrl;
 
         drawStickman(0, false);
         connect();
