@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Fortress Controller</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+            user-select: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 10px 20px 10px;
+            overflow: hidden;
+        }
+
+        #topSection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        #status {
+            padding: 6px 15px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        .connected { background: #28a745; }
+        .disconnected { background: #dc3545; }
+
+        #infoRow {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin: 10px 0;
+            width: 100%;
+            max-width: 320px;
+        }
+        #angleDisplay {
+            font-size: 42px;
+            font-weight: bold;
+            color: #00ff00;
+            background: rgba(0,0,0,0.3);
+            padding: 8px 20px;
+            border-radius: 10px;
+        }
+        #windDisplay {
+            font-size: 16px;
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+
+        #powerSection {
+            width: 100%;
+            max-width: 320px;
+            margin: 0 0 5px 0;
+            padding: 0 10px;
+        }
+        #powerBar {
+            width: 100%;
+            height: 50px;
+            background: #333;
+            border-radius: 25px;
+            overflow: hidden;
+            position: relative;
+            touch-action: none;
+            cursor: pointer;
+            border: 3px solid #555;
+        }
+        #powerBar.locked {
+            border-color: #ff9800;
+            box-shadow: 0 0 15px rgba(255, 152, 0, 0.6);
+        }
+        #powerFill {
+            height: 100%;
+            width: 50%;
+            background: linear-gradient(90deg, #00ff00 0%, #7fff00 30%, #ffff00 50%, #ff8800 75%, #ff0000 100%);
+            transition: width 0.05s;
+            pointer-events: none;
+        }
+        #powerValue {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 22px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px black;
+            pointer-events: none;
+        }
+        #powerLockIcon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 20px;
+            pointer-events: none;
+        }
+        #powerHint {
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+            margin-top: 5px;
+        }
+
+        .btn {
+            width: 90%;
+            max-width: 280px;
+            padding: 10px;
+            font-size: 14px;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            margin: 4px 0;
+            cursor: pointer;
+        }
+        #playerSelect {
+            display: flex;
+            gap: 10px;
+            margin: 5px 0;
+            width: 100%;
+            max-width: 280px;
+        }
+        .playerBtn {
+            flex: 1;
+            padding: 10px;
+            font-size: 14px;
+            border: 2px solid #555;
+            border-radius: 8px;
+            background: #333;
+            color: white;
+        }
+        .playerBtn.selected {
+            border-color: #fff;
+        }
+        #p1Btn.selected { background: #4CAF50; }
+        #p2Btn.selected { background: #2196F3; }
+
+        #turnIndicator {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 8px 15px;
+            border-radius: 8px;
+            margin: 5px 0;
+            text-align: center;
+            width: 100%;
+            max-width: 280px;
+        }
+        #turnIndicator.myTurn {
+            background: #28a745;
+            animation: pulse 1s infinite;
+        }
+        #turnIndicator.waiting {
+            background: #666;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        #sensorBtn { background: #007bff; }
+        #sensorBtn.done { background: #28a745; }
+        #zeroBtn { background: #ff9800; }
+        #readyBtn { background: #28a745; }
+
+        #setupArea {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            max-width: 280px;
+        }
+        #setupArea .btn {
+            flex: 1;
+            margin: 0;
+        }
+
+        #moveArea {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 15px;
+            padding-bottom: 10px;
+        }
+        .moveBtn {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            background: #555;
+            border: 3px solid #888;
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .moveBtn:active {
+            background: #777;
+        }
+
+        #fireBtn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #ff4444, #aa0000);
+            border: 4px solid #fff;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        }
+        #fireBtn:active {
+            transform: scale(0.95);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+        #fireBtn:disabled {
+            background: #666;
+            border-color: #888;
+        }
+
+        #instructions {
+            display: none;
+        }
+        #gameUI {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            margin-top: auto;
+        }
+
+        /* 게임 모드 선택 */
+        #modeSelect {
+            width: 100%;
+            max-width: 300px;
+            margin: 20px 0;
+        }
+        .modeTitle {
+            font-size: 16px;
+            color: #aaa;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .modeButtons {
+            display: flex;
+            gap: 10px;
+        }
+        .modeBtn {
+            flex: 1;
+            padding: 20px 15px;
+            font-size: 16px;
+            border: 3px solid #555;
+            border-radius: 15px;
+            background: #333;
+            color: white;
+            cursor: pointer;
+        }
+        .modeBtn.selected {
+            border-color: #4CAF50;
+            background: #2E7D32;
+        }
+        .modeBtn:active {
+            transform: scale(0.98);
+        }
+
+        /* 게임 시작 버튼 */
+        #startGameBtn {
+            background: #4CAF50 !important;
+            font-size: 16px !important;
+        }
+        #startGameBtn:disabled {
+            background: #555 !important;
+        }
+
+        /* 재시작 버튼 */
+        #restartBtn {
+            padding: 10px 25px;
+            font-size: 14px;
+            border: 2px solid #ff9800;
+            border-radius: 20px;
+            background: transparent;
+            color: #ff9800;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        #restartBtn:active {
+            background: #ff9800;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- 상단 섹션: 상태, 정보 표시 -->
+    <div id="topSection">
+        <div id="status" class="disconnected">연결 안됨</div>
+
+        <!-- 게임 모드 선택 -->
+        <div id="modeSelect">
+            <div class="modeTitle">게임 모드</div>
+            <div class="modeButtons">
+                <button class="modeBtn" id="mode1PBtn">🤖 1P vs AI</button>
+                <button class="modeBtn" id="mode2PBtn">👥 2P 대전</button>
+            </div>
+        </div>
+
+        <!-- 플레이어 선택 (2P 모드에서만 표시) -->
+        <div id="playerSelect" style="display: none;">
+            <button class="playerBtn" id="p1Btn">P1</button>
+            <button class="playerBtn" id="p2Btn">P2</button>
+        </div>
+
+        <!-- 센서 설정 -->
+        <div id="setupArea" style="display: none;">
+            <button class="btn" id="sensorBtn">센서 시작</button>
+            <button class="btn" id="zeroBtn">영점</button>
+            <button class="btn" id="startGameBtn">게임 시작!</button>
+        </div>
+
+        <div id="turnIndicator" style="display: none;">대기중...</div>
+
+        <div id="infoRow" style="display: none;">
+            <div id="angleDisplay">45°</div>
+            <div id="windDisplay">바람 → 0</div>
+        </div>
+    </div>
+
+    <!-- 하단 섹션: 게임 조작 -->
+    <div id="gameUI" style="display: none;">
+        <button id="restartBtn">🔄 새 게임</button>
+
+        <div id="powerSection">
+            <div id="powerBar">
+                <div id="powerFill" style="width: 50%"></div>
+                <span id="powerValue">50%</span>
+                <span id="powerLockIcon">🔓</span>
+            </div>
+            <div id="powerHint">드래그로 파워 조절 · 더블탭으로 잠금 해제</div>
+        </div>
+
+        <div id="moveArea">
+            <button class="moveBtn" id="leftBtn">◀</button>
+            <button id="fireBtn" disabled>FIRE!</button>
+            <button class="moveBtn" id="rightBtn">▶</button>
+        </div>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const angleDisplay = document.getElementById('angleDisplay');
+        const powerFill = document.getElementById('powerFill');
+        const powerValue = document.getElementById('powerValue');
+        const windDisplay = document.getElementById('windDisplay');
+        const sensorBtn = document.getElementById('sensorBtn');
+        const zeroBtn = document.getElementById('zeroBtn');
+        const fireBtn = document.getElementById('fireBtn');
+        const p1Btn = document.getElementById('p1Btn');
+        const p2Btn = document.getElementById('p2Btn');
+        const turnIndicator = document.getElementById('turnIndicator');
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+        const setupArea = document.getElementById('setupArea');
+        const gameUI = document.getElementById('gameUI');
+        const playerSelect = document.getElementById('playerSelect');
+        const powerBar = document.getElementById('powerBar');
+        const powerLockIcon = document.getElementById('powerLockIcon');
+        const modeSelect = document.getElementById('modeSelect');
+        const mode1PBtn = document.getElementById('mode1PBtn');
+        const mode2PBtn = document.getElementById('mode2PBtn');
+        const startGameBtn = document.getElementById('startGameBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const infoRow = document.getElementById('infoRow');
+
+        let ws = null;
+        let sensorOK = false;
+        let angle = 45;
+        let power = 50;
+        let zeroBeta = 45;
+        let curBeta = 0;
+
+        // 게임 관련
+        let gameMode = 0;  // 0: 미선택, 1: 1P vs AI, 2: 2P
+        let myPlayer = 0;  // 0: 미선택, 1: P1, 2: P2
+        let currentTurn = 0;
+        let isMyTurn = false;
+        let gameStarted = false;
+
+        // 파워 게이지 관련
+        let isCharging = false;
+        let powerDirection = 1;
+        let powerInterval = null;
+        let powerLocked = false;
+        let isDraggingPower = false;
+
+        // WebSocket
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${location.host}/ws`;
+
+        function connect() {
+            ws = new WebSocket(wsUrl);
+            ws.onopen = () => {
+                statusDiv.textContent = '연결됨 - 모드 선택';
+                statusDiv.className = 'connected';
+                // 컨트롤러로 등록
+                ws.send(JSON.stringify({ type: 'fortress_controller', player: 0 }));
+            };
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                console.log('받은 메시지:', data);
+
+                if (data.type === 'wind') {
+                    const dir = data.wind > 0 ? '→' : '←';
+                    windDisplay.textContent = `바람 ${dir} ${Math.abs(data.wind).toFixed(1)}`;
+                }
+                if (data.type === 'turn_change' || data.type === 'game_start') {
+                    currentTurn = parseInt(data.currentTurn);
+                    updateTurnDisplay();
+                    showGameUI();
+                }
+                if (data.type === 'game_restart') {
+                    currentTurn = parseInt(data.currentTurn);
+                    updateTurnDisplay();
+                    showGameUI();
+                }
+            };
+            ws.onclose = () => {
+                statusDiv.textContent = '연결 끊김';
+                statusDiv.className = 'disconnected';
+                setTimeout(connect, 3000);
+            };
+        }
+
+        // 게임 UI 표시
+        function showGameUI() {
+            if (myPlayer > 0) {
+                modeSelect.style.display = 'none';
+                playerSelect.style.display = 'none';
+                setupArea.style.display = 'none';
+                turnIndicator.style.display = 'block';
+                infoRow.style.display = 'flex';
+                gameUI.style.display = 'flex';
+                fireBtn.disabled = false;
+                gameStarted = true;
+            }
+        }
+
+        // 게임 모드 선택
+        mode1PBtn.onclick = () => selectMode(1);
+        mode2PBtn.onclick = () => selectMode(2);
+
+        function selectMode(mode) {
+            gameMode = mode;
+            mode1PBtn.classList.toggle('selected', mode === 1);
+            mode2PBtn.classList.toggle('selected', mode === 2);
+
+            if (mode === 1) {
+                // 1P vs AI: 자동으로 P1
+                myPlayer = 1;
+                playerSelect.style.display = 'none';
+                statusDiv.textContent = '1P vs AI - 센서 설정';
+            } else {
+                // 2P: 플레이어 선택 필요
+                playerSelect.style.display = 'flex';
+                statusDiv.textContent = '2P 대전 - 플레이어 선택';
+            }
+            setupArea.style.display = 'flex';
+
+            // PC에 게임 모드 전송
+            if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({ type: 'set_game_mode', mode: mode }));
+            }
+        }
+
+        // 플레이어 선택 (2P 모드)
+        p1Btn.onclick = () => selectPlayer(1);
+        p2Btn.onclick = () => selectPlayer(2);
+
+        function selectPlayer(num) {
+            myPlayer = num;
+            p1Btn.classList.toggle('selected', num === 1);
+            p2Btn.classList.toggle('selected', num === 2);
+            statusDiv.textContent = `P${num} 선택됨 - 센서 설정`;
+
+            if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({ type: 'fortress_controller', player: num }));
+            }
+        }
+
+        function updateTurnDisplay() {
+            if (myPlayer === 0) {
+                turnIndicator.textContent = '플레이어 선택하세요';
+                turnIndicator.className = 'waiting';
+                isMyTurn = false;
+            } else if (currentTurn === 0) {
+                turnIndicator.textContent = '게임 대기중...';
+                turnIndicator.className = 'waiting';
+                isMyTurn = false;
+            } else if (currentTurn === myPlayer) {
+                turnIndicator.textContent = '🎯 내 차례!';
+                turnIndicator.className = 'myTurn';
+                isMyTurn = true;
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            } else {
+                turnIndicator.textContent = `P${currentTurn} 차례...`;
+                turnIndicator.className = 'waiting';
+                isMyTurn = false;
+            }
+        }
+
+        // 센서
+        sensorBtn.onclick = () => {
+            if (sensorOK) return;
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(r => {
+                    if (r === 'granted') startSensor();
+                    else alert('권한 거부');
+                }).catch(e => alert('오류: ' + e));
+            } else {
+                startSensor();
+            }
+        };
+
+        function startSensor() {
+            sensorOK = true;
+            sensorBtn.textContent = '센서 OK ✓';
+            sensorBtn.classList.add('done');
+            fireBtn.disabled = false;
+            window.addEventListener('deviceorientation', onOrient);
+        }
+
+        function onOrient(e) {
+            curBeta = e.beta || 0;
+
+            // 영점 기준으로 각도 계산
+            // 폰을 세우면(beta 증가) 각도 증가
+            let diff = curBeta - zeroBeta;
+            angle = 45 + diff;
+            angle = Math.max(5, Math.min(85, Math.round(angle)));
+
+            angleDisplay.textContent = angle + '°';
+
+            // 서버로 전송 (내 차례일 때만)
+            if (ws && ws.readyState === 1 && isMyTurn) {
+                ws.send(JSON.stringify({ type: 'angle', angle: angle, player: myPlayer }));
+            }
+        }
+
+        // 영점 설정 (현재 위치를 45도로)
+        zeroBtn.onclick = () => {
+            if (!sensorOK) {
+                alert('먼저 센서를 시작하세요');
+                return;
+            }
+            zeroBeta = curBeta;
+            angle = 45;
+            angleDisplay.textContent = '45°';
+            if (navigator.vibrate) navigator.vibrate(50);
+        };
+
+        // 게임 시작
+        startGameBtn.onclick = () => {
+            if (gameMode === 0) {
+                alert('먼저 게임 모드를 선택하세요');
+                return;
+            }
+            if (gameMode === 2 && myPlayer === 0) {
+                alert('먼저 플레이어를 선택하세요');
+                return;
+            }
+            if (!sensorOK) {
+                alert('먼저 센서를 시작하세요');
+                return;
+            }
+
+            // PC에 게임 시작 명령 전송
+            if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({
+                    type: 'fortress_controller',
+                    player: myPlayer
+                }));
+                ws.send(JSON.stringify({
+                    type: 'start_game_request',
+                    mode: gameMode,
+                    player: myPlayer
+                }));
+            }
+            if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+        };
+
+        // 게임 재시작
+        restartBtn.onclick = () => {
+            if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({
+                    type: 'restart_game_request',
+                    mode: gameMode
+                }));
+            }
+            if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+        };
+
+        // 파워 게이지 업데이트 (자동 충전용 - 30% 느리게)
+        function updatePower() {
+            power += powerDirection * 2;  // 기존 3에서 2로 (약 30% 느림)
+            if (power >= 100) {
+                power = 100;
+                powerDirection = -1;
+            } else if (power <= 10) {
+                power = 10;
+                powerDirection = 1;
+            }
+            powerFill.style.width = power + '%';
+            powerValue.textContent = power + '%';
+
+            if (ws && ws.readyState === 1 && isMyTurn) {
+                ws.send(JSON.stringify({ type: 'power', power: power, player: myPlayer }));
+            }
+        }
+
+        // 파워바 드래그로 파워 설정
+        function setPowerFromPosition(clientX) {
+            const rect = powerBar.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const percent = Math.max(10, Math.min(100, Math.round((x / rect.width) * 100)));
+
+            power = percent;
+            powerFill.style.width = power + '%';
+            powerValue.textContent = power + '%';
+
+            // PC에 파워 전송
+            if (ws && ws.readyState === 1 && isMyTurn) {
+                ws.send(JSON.stringify({ type: 'power', power: power, player: myPlayer }));
+            }
+        }
+
+        // 파워 고정 토글
+        function togglePowerLock() {
+            powerLocked = !powerLocked;
+            if (powerLocked) {
+                powerBar.classList.add('locked');
+                powerLockIcon.textContent = '🔒';
+                if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+            } else {
+                powerBar.classList.remove('locked');
+                powerLockIcon.textContent = '🔓';
+                if (navigator.vibrate) navigator.vibrate(50);
+            }
+        }
+
+        // 파워바 터치/마우스 이벤트
+        powerBar.addEventListener('mousedown', (e) => {
+            isDraggingPower = true;
+            setPowerFromPosition(e.clientX);
+        });
+        powerBar.addEventListener('mousemove', (e) => {
+            if (isDraggingPower) setPowerFromPosition(e.clientX);
+        });
+        powerBar.addEventListener('mouseup', () => {
+            if (isDraggingPower) {
+                isDraggingPower = false;
+                togglePowerLock();  // 드래그 끝나면 자동 고정
+            }
+        });
+        powerBar.addEventListener('mouseleave', () => {
+            if (isDraggingPower) {
+                isDraggingPower = false;
+                togglePowerLock();
+            }
+        });
+
+        powerBar.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDraggingPower = true;
+            setPowerFromPosition(e.touches[0].clientX);
+        });
+        powerBar.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (isDraggingPower) setPowerFromPosition(e.touches[0].clientX);
+        });
+        powerBar.addEventListener('touchend', () => {
+            if (isDraggingPower) {
+                isDraggingPower = false;
+                togglePowerLock();  // 드래그 끝나면 자동 고정
+            }
+        });
+
+        // 파워바 더블탭/더블클릭으로 고정 해제
+        let lastTap = 0;
+        powerBar.addEventListener('click', (e) => {
+            const now = Date.now();
+            if (now - lastTap < 300 && powerLocked) {
+                togglePowerLock();  // 더블클릭으로 고정 해제
+            }
+            lastTap = now;
+        });
+
+        // 발사 버튼 누름
+        function startCharging() {
+            if (!isMyTurn || myPlayer === 0) {
+                if (navigator.vibrate) navigator.vibrate(50);
+                return;
+            }
+            isCharging = true;
+            fireBtn.textContent = '발사!';
+        }
+
+        // 발사 (버튼 놓음) - 현재 파워로 발사, 파워 유지
+        function fire() {
+            if (!isCharging) return;
+            isCharging = false;
+
+            if (navigator.vibrate) navigator.vibrate(100);
+
+            if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({
+                    type: 'fire_fortress',
+                    angle: angle,
+                    power: power,
+                    player: myPlayer
+                }));
+            }
+
+            // 버튼 텍스트만 복원, 파워는 유지
+            setTimeout(() => {
+                fireBtn.textContent = 'FIRE!';
+            }, 300);
+        }
+
+        // 터치/마우스 이벤트
+        fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startCharging(); });
+        fireBtn.addEventListener('touchend', fire);
+        fireBtn.addEventListener('touchcancel', fire);
+        fireBtn.addEventListener('mousedown', startCharging);
+        fireBtn.addEventListener('mouseup', fire);
+        fireBtn.addEventListener('mouseleave', () => { if (isCharging) fire(); });
+
+        // 이동
+        function move(direction) {
+            if (!isMyTurn || myPlayer === 0) return;
+            if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({
+                    type: 'move',
+                    direction: direction,
+                    player: myPlayer
+                }));
+            }
+            if (navigator.vibrate) navigator.vibrate(30);
+        }
+
+        leftBtn.addEventListener('click', () => move('left'));
+        rightBtn.addEventListener('click', () => move('right'));
+
+        // 연속 이동 (버튼 누르고 있을 때)
+        let moveInterval = null;
+        function startMove(direction) {
+            if (!isMyTurn || myPlayer === 0) return;
+            move(direction);
+            moveInterval = setInterval(() => move(direction), 100);
+        }
+        function stopMove() {
+            if (moveInterval) {
+                clearInterval(moveInterval);
+                moveInterval = null;
+            }
+        }
+
+        leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startMove('left'); });
+        leftBtn.addEventListener('touchend', stopMove);
+        leftBtn.addEventListener('touchcancel', stopMove);
+        rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startMove('right'); });
+        rightBtn.addEventListener('touchend', stopMove);
+        rightBtn.addEventListener('touchcancel', stopMove);
+
+        connect();
+    </script>
+</body>
+</html>

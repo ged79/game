@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>달리기 게임</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+        #startBtn {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            font-size: 24px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        #gameArea {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        #character {
+            position: absolute;
+            bottom: 38%;
+            left: 15%;
+            width: 100px;
+            height: 140px;
+            z-index: 10;
+        }
+        #ground {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 200%;
+            height: 40%;
+            background: repeating-linear-gradient(
+                90deg,
+                #228B22 0px,
+                #228B22 50px,
+                #1e7b1e 50px,
+                #1e7b1e 100px
+            );
+        }
+        #trees {
+            position: absolute;
+            bottom: 40%;
+            left: 0;
+            width: 200%;
+            height: 30%;
+        }
+        .tree {
+            position: absolute;
+            bottom: 0;
+            font-size: 60px;
+        }
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            z-index: 50;
+        }
+        #speedBar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 30px;
+            background: #333;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        #speedFill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(to right, #00ff00, #ffff00, #ff0000);
+            transition: width 0.1s;
+        }
+        #speedLabel {
+            position: fixed;
+            bottom: 55px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 18px;
+            text-shadow: 1px 1px 2px black;
+        }
+        #distance {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 20px;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body>
+    <button id="startBtn">시작하기</button>
+
+    <div id="info">
+        <div>가속도: <span id="accel">0</span></div>
+        <div>속도: <span id="speed">0</span></div>
+    </div>
+
+    <div id="distance">거리: <span id="dist">0</span>m</div>
+
+    <div id="gameArea">
+        <div id="trees"></div>
+        <canvas id="character" width="100" height="140"></canvas>
+        <div id="ground"></div>
+    </div>
+
+    <div id="speedLabel">달리기 속도</div>
+    <div id="speedBar">
+        <div id="speedFill"></div>
+    </div>
+
+    <script>
+        const btn = document.getElementById('startBtn');
+        const canvas = document.getElementById('character');
+        const ctx = canvas.getContext('2d');
+        const accelDisplay = document.getElementById('accel');
+        const speedDisplay = document.getElementById('speed');
+        const speedFill = document.getElementById('speedFill');
+        const ground = document.getElementById('ground');
+        const trees = document.getElementById('trees');
+        const distDisplay = document.getElementById('dist');
+
+        let speed = 0;
+        let lastAccel = 0;
+        let lastStepTime = 0;
+        let groundPos = 0;
+        let treePos = 0;
+        let distance = 0;
+        let runPhase = 0;
+
+        function createTrees() {
+            const treeTypes = ['🌲', '🌳', '🌴'];
+            for (let i = 0; i < 15; i++) {
+                const tree = document.createElement('div');
+                tree.className = 'tree';
+                tree.textContent = treeTypes[Math.floor(Math.random() * treeTypes.length)];
+                tree.style.left = (i * 150 + Math.random() * 50) + 'px';
+                tree.style.fontSize = (40 + Math.random() * 40) + 'px';
+                trees.appendChild(tree);
+            }
+        }
+        createTrees();
+
+        function startGame() {
+            btn.style.display = 'none';
+
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            enableMotion();
+                        } else {
+                            alert('권한이 거부되었습니다');
+                        }
+                    })
+                    .catch(err => alert('권한 요청 오류: ' + err));
+            } else {
+                enableMotion();
+            }
+        }
+
+        function enableMotion() {
+            window.addEventListener('devicemotion', handleMotion);
+            gameLoop();
+        }
+
+        function handleMotion(event) {
+            const acc = event.accelerationIncludingGravity;
+            if (!acc) return;
+
+            const totalAccel = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+            const accelChange = Math.abs(totalAccel - lastAccel);
+
+            accelDisplay.textContent = accelChange.toFixed(2);
+
+            const now = Date.now();
+            // 민감도 50%로 감소 (임계값 6 -> 12)
+            if (accelChange > 12 && now - lastStepTime > 200) {
+                lastStepTime = now;
+                speed = Math.min(100, speed + 15);
+            }
+
+            lastAccel = totalAccel;
+        }
+
+        // 졸라맨 그리기
+        function drawStickman(phase, isRunning) {
+            ctx.clearRect(0, 0, 100, 140);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+
+            const centerX = 50;
+            let bounce = 0;
+
+            if (isRunning) {
+                // 달리기 포즈 (0~1 사이클)
+                const p = phase * Math.PI * 2;
+                bounce = Math.abs(Math.sin(p)) * 8;
+
+                // 머리 (살짝 앞으로)
+                ctx.beginPath();
+                ctx.arc(centerX + 5, 22 - bounce, 14, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 몸통 (앞으로 기울임)
+                ctx.beginPath();
+                ctx.moveTo(centerX + 3, 36 - bounce);
+                ctx.lineTo(centerX + 8, 75 - bounce);
+                ctx.stroke();
+
+                // 다리 계산
+                const legPhase1 = Math.sin(p);
+                const legPhase2 = Math.sin(p + Math.PI);
+
+                // 오른다리
+                drawLeg(centerX + 8, 75 - bounce, legPhase1, ctx);
+                // 왼다리
+                drawLeg(centerX + 8, 75 - bounce, legPhase2, ctx);
+
+                // 팔 (다리 반대)
+                drawArm(centerX + 5, 42 - bounce, -legPhase1, ctx);
+                drawArm(centerX + 5, 42 - bounce, -legPhase2, ctx);
+
+            } else {
+                // 정지 포즈
+                // 머리
+                ctx.beginPath();
+                ctx.arc(centerX, 22, 14, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 몸통
+                ctx.beginPath();
+                ctx.moveTo(centerX, 36);
+                ctx.lineTo(centerX, 75);
+                ctx.stroke();
+
+                // 팔
+                ctx.beginPath();
+                ctx.moveTo(centerX, 45);
+                ctx.lineTo(centerX - 15, 70);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(centerX, 45);
+                ctx.lineTo(centerX + 15, 70);
+                ctx.stroke();
+
+                // 다리
+                ctx.beginPath();
+                ctx.moveTo(centerX, 75);
+                ctx.lineTo(centerX - 12, 130);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(centerX, 75);
+                ctx.lineTo(centerX + 12, 130);
+                ctx.stroke();
+            }
+        }
+
+        function drawLeg(hipX, hipY, phase, ctx) {
+            // phase: -1 (뒤) ~ 1 (앞)
+            const thighLength = 28;
+            const calfLength = 30;
+
+            // 허벅지 각도 (-40도 ~ 60도)
+            const thighAngle = phase * 50 - 10; // 약간 뒤쪽 기본
+            const thighRad = thighAngle * Math.PI / 180;
+
+            const kneeX = hipX + Math.sin(thighRad) * thighLength;
+            const kneeY = hipY + Math.cos(thighRad) * thighLength;
+
+            // 무릎 굽힘 (앞으로 올릴 때 많이 굽힘)
+            let kneeBend;
+            if (phase > 0) {
+                // 앞으로 올릴 때: 무릎 많이 굽힘
+                kneeBend = phase * 90;
+            } else {
+                // 뒤로 뻗을 때: 무릎 약간 굽힘
+                kneeBend = Math.abs(phase) * 20;
+            }
+
+            const calfAngle = thighAngle - kneeBend;
+            const calfRad = calfAngle * Math.PI / 180;
+
+            const footX = kneeX + Math.sin(calfRad) * calfLength;
+            const footY = kneeY + Math.cos(calfRad) * calfLength;
+
+            // 허벅지 그리기
+            ctx.beginPath();
+            ctx.moveTo(hipX, hipY);
+            ctx.lineTo(kneeX, kneeY);
+            ctx.stroke();
+
+            // 종아리 그리기
+            ctx.beginPath();
+            ctx.moveTo(kneeX, kneeY);
+            ctx.lineTo(footX, footY);
+            ctx.stroke();
+        }
+
+        function drawArm(shoulderX, shoulderY, phase, ctx) {
+            const upperArmLength = 18;
+            const lowerArmLength = 16;
+
+            // 위팔 각도 (-40도 ~ 40도)
+            const upperAngle = phase * 40;
+            const upperRad = upperAngle * Math.PI / 180;
+
+            const elbowX = shoulderX + Math.sin(upperRad) * upperArmLength;
+            const elbowY = shoulderY + Math.cos(upperRad) * upperArmLength;
+
+            // 팔꿈치 굽힘 (항상 약간 굽힘, 달릴 때 90도 유지)
+            const elbowBend = 70 + Math.abs(phase) * 20;
+            const lowerAngle = upperAngle + elbowBend;
+            const lowerRad = lowerAngle * Math.PI / 180;
+
+            const handX = elbowX + Math.sin(lowerRad) * lowerArmLength;
+            const handY = elbowY + Math.cos(lowerRad) * lowerArmLength;
+
+            // 위팔 그리기
+            ctx.beginPath();
+            ctx.moveTo(shoulderX, shoulderY);
+            ctx.lineTo(elbowX, elbowY);
+            ctx.stroke();
+
+            // 아래팔 그리기
+            ctx.beginPath();
+            ctx.moveTo(elbowX, elbowY);
+            ctx.lineTo(handX, handY);
+            ctx.stroke();
+        }
+
+        function gameLoop() {
+            speed = Math.max(0, speed - 0.5);
+            distance += speed * 0.01;
+            distDisplay.textContent = Math.floor(distance);
+
+            speedDisplay.textContent = Math.round(speed);
+            speedFill.style.width = speed + '%';
+
+            // 배경 스크롤
+            groundPos -= speed * 0.5;
+            treePos -= speed * 0.3;
+            if (groundPos < -window.innerWidth) groundPos = 0;
+            if (treePos < -window.innerWidth) treePos = 0;
+            ground.style.transform = `translateX(${groundPos}px)`;
+            trees.style.transform = `translateX(${treePos}px)`;
+
+            // 달리기 애니메이션
+            if (speed > 5) {
+                // 속도에 따른 달리기 사이클 속도
+                const cycleSpeed = 0.008 + speed * 0.0003;
+                runPhase = (runPhase + cycleSpeed) % 1;
+                drawStickman(runPhase, true);
+            } else {
+                runPhase = 0;
+                drawStickman(0, false);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 초기 정지 포즈 그리기
+        drawStickman(0, false);
+
+        btn.addEventListener('click', startGame);
+    </script>
+</body>
+</html>

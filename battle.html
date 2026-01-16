@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battleground</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB 0%, #4a90a4 50%, #2d5a27 50%, #1e3d1a 100%);
+            font-family: Arial, sans-serif;
+            cursor: none;
+        }
+
+        /* 조준점 */
+        #crosshair {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            pointer-events: none;
+            z-index: 1000;
+            transform: translate(-50%, -50%);
+        }
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: red;
+        }
+        #crosshair::before {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #crosshair::after {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        #crosshair .dot {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: red;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* 상태 표시 */
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            z-index: 500;
+        }
+        #status.waiting { border-left: 4px solid #ff9800; }
+        #status.ready { border-left: 4px solid #28a745; }
+
+        /* 점수판 */
+        #scoreboard {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            z-index: 500;
+            text-align: center;
+        }
+        #score {
+            font-size: 48px;
+            font-weight: bold;
+            color: #FFD700;
+        }
+        #hits {
+            font-size: 14px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        /* 타겟 */
+        .target {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            cursor: crosshair;
+            transition: transform 0.1s;
+            z-index: 100;
+        }
+        .target.hit {
+            animation: hitEffect 0.3s ease-out;
+        }
+        @keyframes hitEffect {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        /* 타겟 이미지 (원형 과녁) */
+        .target-inner {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle,
+                #ff0000 0%, #ff0000 15%,
+                #ffffff 15%, #ffffff 30%,
+                #ff0000 30%, #ff0000 45%,
+                #ffffff 45%, #ffffff 60%,
+                #ff0000 60%, #ff0000 75%,
+                #ffffff 75%, #ffffff 100%
+            );
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        /* 적 캐릭터 */
+        .enemy {
+            position: absolute;
+            font-size: 80px;
+            z-index: 100;
+            filter: drop-shadow(3px 3px 3px rgba(0,0,0,0.5));
+            transition: transform 0.1s;
+        }
+        .enemy.hit {
+            animation: enemyHit 0.5s ease-out forwards;
+        }
+        @keyframes enemyHit {
+            0% { transform: scale(1); }
+            20% { transform: scale(1.2) rotate(10deg); }
+            100% { transform: scale(0) rotate(180deg); opacity: 0; }
+        }
+
+        /* 발사 효과 */
+        .muzzle-flash {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(255,200,0,0.8) 0%, transparent 70%);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 2000;
+            animation: flash 0.1s ease-out forwards;
+        }
+        @keyframes flash {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+        }
+        @keyframes muzzleFlash {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(0.3); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+        }
+
+        /* 탄흔 */
+        .bullet-hole {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background: radial-gradient(circle, #000 0%, #333 50%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* 캘리브레이션 안내 */
+        #calibGuide {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 3000;
+            color: white;
+        }
+        #calibTarget {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        #targetCircle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle,
+                #ff0000 0%, #ff0000 20%,
+                #ffffff 20%, #ffffff 35%,
+                #ff0000 35%, #ff0000 50%,
+                #ffffff 50%, #ffffff 65%,
+                #ff0000 65%, #ff0000 80%,
+                transparent 80%
+            );
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        #targetText {
+            margin-top: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff9800;
+        }
+        #calibInfo {
+            position: fixed;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        #calibInfo h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        #calibInfo p {
+            font-size: 18px;
+            margin: 10px 0;
+            color: #aaa;
+        }
+        #calibProgress {
+            color: #ff9800 !important;
+            font-size: 24px !important;
+        }
+
+        /* 웨이브 표시 */
+        #waveDisplay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 3px 3px 6px black;
+            z-index: 2500;
+            opacity: 0;
+            pointer-events: none;
+        }
+        #waveDisplay.show {
+            animation: waveAnnounce 2s ease-out forwards;
+        }
+        @keyframes waveAnnounce {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        #ammoBar {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 5px;
+            z-index: 500;
+        }
+        .ammo-bullet {
+            width: 8px;
+            height: 25px;
+            background: linear-gradient(to bottom, #FFD700, #B8860B);
+            border-radius: 2px;
+        }
+        .ammo-bullet.empty {
+            background: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair"><div class="dot"></div></div>
+
+    <div id="status" class="waiting">
+        <div>상태: <span id="connStatus">연결 대기중</span></div>
+        <div>컨트롤러: <span id="gunStatus">없음</span></div>
+    </div>
+
+    <div id="scoreboard">
+        <div>SCORE</div>
+        <div id="score">0</div>
+        <div id="hits">명중: 0 / 발사: 0</div>
+    </div>
+
+    <div id="waveDisplay">WAVE 1</div>
+
+    <!-- 탄약바 제거됨 -->
+
+    <div id="calibGuide">
+        <div id="calibTarget">
+            <div id="targetCircle"></div>
+            <div id="targetText">표적</div>
+        </div>
+        <div id="calibInfo">
+            <h1>Battleground</h1>
+            <p>핸드폰에서 gun.html 접속</p>
+            <p id="calibProgress">대기 중...</p>
+            <button id="manualStartBtn" style="margin-top:20px; padding:15px 30px; font-size:18px; background:#28a745; color:white; border:none; border-radius:10px; cursor:pointer;">마우스로 테스트</button>
+        </div>
+    </div>
+
+    <script>
+        const crosshair = document.getElementById('crosshair');
+        const connStatus = document.getElementById('connStatus');
+        const gunStatus = document.getElementById('gunStatus');
+        const statusDiv = document.getElementById('status');
+        const scoreDiv = document.getElementById('score');
+        const hitsDiv = document.getElementById('hits');
+        const calibGuide = document.getElementById('calibGuide');
+        const calibTarget = document.getElementById('calibTarget');
+        const calibProgress = document.getElementById('calibProgress');
+        const targetText = document.getElementById('targetText');
+        const waveDisplay = document.getElementById('waveDisplay');
+
+        let ws = null;
+        let score = 0;
+        let hits = 0;
+
+        // 총소리 (Web Audio API - 실제 같은 소리)
+        let audioCtx = null;
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioCtx;
+        }
+
+        function playGunSound() {
+            try {
+                const ctx = getAudioContext();
+                if (ctx.state === 'suspended') ctx.resume();
+
+                const now = ctx.currentTime;
+
+                // 1. 초기 폭발음 (짧고 강한 노이즈)
+                const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+                const noiseData = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < noiseData.length; i++) {
+                    const t = i / noiseData.length;
+                    const decay = Math.exp(-t * 25);  // 빠른 감쇠
+                    noiseData[i] = (Math.random() * 2 - 1) * decay;
+                }
+
+                const noiseSource = ctx.createBufferSource();
+                noiseSource.buffer = noiseBuffer;
+
+                // 저역 통과 필터 (둔탁한 소리)
+                const lowpass = ctx.createBiquadFilter();
+                lowpass.type = 'lowpass';
+                lowpass.frequency.value = 800;
+
+                // 고역 통과 필터 (찰칵 소리)
+                const highpass = ctx.createBiquadFilter();
+                highpass.type = 'highpass';
+                highpass.frequency.value = 300;
+
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.setValueAtTime(1, now);
+                noiseGain.gain.exponentialDecayTo = 0.01;
+
+                noiseSource.connect(lowpass);
+                lowpass.connect(highpass);
+                highpass.connect(noiseGain);
+                noiseGain.connect(ctx.destination);
+
+                // 2. 저음 펀치 (쿵 소리)
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.1);
+
+                const oscGain = ctx.createGain();
+                oscGain.gain.setValueAtTime(0.8, now);
+                oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+                osc.connect(oscGain);
+                oscGain.connect(ctx.destination);
+
+                // 3. 메탈릭 클릭
+                const click = ctx.createOscillator();
+                click.type = 'square';
+                click.frequency.setValueAtTime(1200, now);
+                click.frequency.exponentialRampToValueAtTime(200, now + 0.03);
+
+                const clickGain = ctx.createGain();
+                clickGain.gain.setValueAtTime(0.3, now);
+                clickGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+
+                click.connect(clickGain);
+                clickGain.connect(ctx.destination);
+
+                // 재생
+                noiseSource.start(now);
+                noiseSource.stop(now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.15);
+                click.start(now);
+                click.stop(now + 0.05);
+
+            } catch(e) {
+                console.log('Sound error:', e);
+            }
+        }
+
+        // 타겟 명중 효과음
+        function playHitSound() {
+            try {
+                const ctx = getAudioContext();
+                if (ctx.state === 'suspended') ctx.resume();
+
+                const now = ctx.currentTime;
+
+                // 1. 팅~ 소리 (금속 맞는 소리)
+                const osc1 = ctx.createOscillator();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(880, now);
+                osc1.frequency.exponentialRampToValueAtTime(440, now + 0.1);
+
+                const gain1 = ctx.createGain();
+                gain1.gain.setValueAtTime(0.5, now);
+                gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+                osc1.connect(gain1);
+                gain1.connect(ctx.destination);
+
+                // 2. 찌릿 소리
+                const osc2 = ctx.createOscillator();
+                osc2.type = 'sawtooth';
+                osc2.frequency.setValueAtTime(1500, now);
+                osc2.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+
+                const gain2 = ctx.createGain();
+                gain2.gain.setValueAtTime(0.2, now);
+                gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+
+                osc2.connect(gain2);
+                gain2.connect(ctx.destination);
+
+                osc1.start(now);
+                osc1.stop(now + 0.2);
+                osc2.start(now);
+                osc2.stop(now + 0.15);
+
+            } catch(e) {
+                console.log('Hit sound error:', e);
+            }
+        }
+
+        // 총구 섬광 효과
+        function showMuzzleFlash(x, y) {
+            const flash = document.createElement('div');
+            flash.style.cssText = `
+                position: fixed;
+                left: ${x}px;
+                top: ${y}px;
+                width: 60px;
+                height: 60px;
+                background: radial-gradient(circle, #fff 0%, #ff0 30%, #f80 60%, transparent 70%);
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+                z-index: 9999;
+                animation: muzzleFlash 0.1s ease-out forwards;
+            `;
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 100);
+        }
+        let shots = 0;
+        let wave = 1;
+        let targets = [];
+        let gameActive = false;
+
+        // 조준점 위치
+        let aimX = window.innerWidth / 2;
+        let aimY = window.innerHeight / 2;
+
+
+        // WebSocket 연결
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+        function connect() {
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                connStatus.textContent = '서버 연결됨';
+                ws.send(JSON.stringify({ type: 'pc_battle' }));
+            };
+
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+
+                if (data.type === 'aim') {
+                    // 조준점 이동
+                    aimX = data.x * window.innerWidth;
+                    aimY = data.y * window.innerHeight;
+                    crosshair.style.left = aimX + 'px';
+                    crosshair.style.top = aimY + 'px';
+                }
+                else if (data.type === 'fire') {
+                    playGunSound();
+                    handleFire(data.x * window.innerWidth, data.y * window.innerHeight);
+                }
+                else if (data.type === 'show_target') {
+                    // 캘리브레이션 표적 표시
+                    const x = data.x * window.innerWidth;
+                    const y = data.y * window.innerHeight;
+                    calibTarget.style.left = x + 'px';
+                    calibTarget.style.top = y + 'px';
+                    calibProgress.textContent = `캘리브레이션 ${data.step} / ${data.total}`;
+
+                    const names = ['중앙', '우상단'];
+                    targetText.textContent = names[data.step - 1] || '표적';
+                }
+                else if (data.type === 'calibrated') {
+                    // 캘리브레이션 완료
+                    calibGuide.style.display = 'none';
+                    gunStatus.textContent = '연결됨';
+                    statusDiv.className = 'ready';
+                    startGame();
+                }
+                else if (data.type === 'gun_connected') {
+                    gunStatus.textContent = '캘리브레이션 중...';
+                }
+            };
+
+            ws.onclose = () => {
+                connStatus.textContent = '연결 끊김';
+                statusDiv.className = 'waiting';
+                setTimeout(connect, 3000);
+            };
+        }
+
+        // 발사 처리
+        function handleFire(x, y) {
+            shots++;
+
+            // 총구 섬광 (조준점 위치에)
+            showMuzzleFlash(x, y);
+
+            // 탄흔
+            const hole = document.createElement('div');
+            hole.className = 'bullet-hole';
+            hole.style.left = (x - 7.5) + 'px';
+            hole.style.top = (y - 7.5) + 'px';
+            document.body.appendChild(hole);
+            setTimeout(() => hole.remove(), 5000);
+
+            // 타겟 명중 체크
+            let hitTarget = null;
+            for (let i = targets.length - 1; i >= 0; i--) {
+                const t = targets[i];
+                const rect = t.element.getBoundingClientRect();
+                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    hitTarget = t;
+                    break;
+                }
+            }
+
+            if (hitTarget) {
+                hits++;
+                score += hitTarget.points;
+                scoreDiv.textContent = score;
+                playHitSound();  // 명중 효과음
+
+                hitTarget.element.classList.add('hit');
+                setTimeout(() => {
+                    hitTarget.element.remove();
+                    targets = targets.filter(t => t !== hitTarget);
+
+                    // 모든 타겟 처치시 다음 웨이브
+                    if (targets.length === 0 && gameActive) {
+                        nextWave();
+                    }
+                }, 300);
+            }
+
+            hitsDiv.textContent = `명중: ${hits} / 발사: ${shots}`;
+        }
+
+        // 타겟 생성
+        function spawnTarget() {
+            const isEnemy = Math.random() > 0.3;
+            const element = document.createElement('div');
+
+            if (isEnemy) {
+                element.className = 'enemy';
+                element.textContent = ['🧟', '👹', '💀', '👾'][Math.floor(Math.random() * 4)];
+            } else {
+                element.className = 'target';
+                element.innerHTML = '<div class="target-inner"></div>';
+            }
+
+            // 랜덤 위치 (화면 가장자리 제외)
+            const margin = 100;
+            const x = margin + Math.random() * (window.innerWidth - margin * 2);
+            const y = margin + Math.random() * (window.innerHeight - margin * 2);
+
+            element.style.left = x + 'px';
+            element.style.top = y + 'px';
+
+            document.body.appendChild(element);
+
+            const target = {
+                element: element,
+                points: isEnemy ? 100 : 50,
+                lifetime: 3000 + Math.random() * 2000
+            };
+
+            targets.push(target);
+
+            // 일정 시간 후 사라짐
+            setTimeout(() => {
+                if (targets.includes(target)) {
+                    element.style.opacity = '0';
+                    element.style.transition = 'opacity 0.3s';
+                    setTimeout(() => {
+                        element.remove();
+                        targets = targets.filter(t => t !== target);
+                    }, 300);
+                }
+            }, target.lifetime);
+        }
+
+        // 타겟 지속 생성
+        let spawnInterval = null;
+
+        function startGame() {
+            gameActive = true;
+            score = 0;
+            hits = 0;
+            shots = 0;
+            scoreDiv.textContent = '0';
+            hitsDiv.textContent = '명중: 0 / 발사: 0';
+
+            waveDisplay.textContent = 'START!';
+            waveDisplay.classList.add('show');
+            setTimeout(() => waveDisplay.classList.remove('show'), 2000);
+
+            // 1초마다 타겟 생성
+            spawnInterval = setInterval(() => {
+                if (gameActive && targets.length < 8) {  // 최대 8개까지
+                    spawnTarget();
+                }
+            }, 1000);
+
+            // 첫 타겟 바로 생성
+            spawnTarget();
+            spawnTarget();
+        }
+
+        // 마우스로 테스트 (개발용)
+        document.addEventListener('mousemove', (e) => {
+            if (!gameActive && calibGuide.style.display !== 'none') return;
+            crosshair.style.left = e.clientX + 'px';
+            crosshair.style.top = e.clientY + 'px';
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!gameActive) return;
+            playGunSound();
+            handleFire(e.clientX, e.clientY);
+        });
+
+        // 수동 시작 버튼
+        document.getElementById('manualStartBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            calibGuide.style.display = 'none';
+            startGame();
+        });
+
+        connect();
+    </script>
+</body>
+</html>

@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>달리기 게임</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+            display: flex;
+        }
+
+        /* 왼쪽 패널 (1/4) */
+        #leftPanel {
+            width: 25%;
+            height: 100%;
+            background: linear-gradient(to bottom, #1a1a2e 0%, #16213e 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            z-index: 10;
+        }
+
+        /* 오른쪽 영상 영역 (3/4) */
+        #rightPanel {
+            width: 75%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* YouTube 배경 */
+        #youtubeContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        #youtubeContainer iframe {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 180%;
+            height: 180%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* 멈춤 시 오버레이 */
+        #pauseOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 40;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        #pauseOverlay.show { opacity: 1; }
+        #pauseText {
+            color: white;
+            font-size: 36px;
+            text-shadow: 3px 3px 6px black;
+        }
+
+        /* 왼쪽 패널 내부 요소들 */
+        #statusBadge {
+            background: #dc3545;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        #statusBadge.connected { background: #28a745; }
+
+        /* 트랙 (세로) */
+        #trackContainer {
+            flex: 1;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            margin: 20px 0;
+        }
+
+        #track {
+            width: 8px;
+            height: 100%;
+            background: #333;
+            border-radius: 4px;
+            position: relative;
+        }
+
+        /* 거리 마커 */
+        .marker {
+            position: absolute;
+            left: 20px;
+            font-size: 12px;
+            color: #666;
+            transform: translateY(-50%);
+        }
+        .marker::before {
+            content: '';
+            position: absolute;
+            left: -17px;
+            top: 50%;
+            width: 10px;
+            height: 2px;
+            background: #444;
+        }
+
+        /* 캐릭터 위치 (트랙 위) */
+        #characterMarker {
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            transform: translateX(-50%);
+            transition: bottom 0.3s ease-out;
+        }
+
+        /* 캐릭터 캔버스 */
+        #character {
+            width: 80px;
+            height: 100px;
+        }
+
+        /* 스탯 표시 */
+        #stats {
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            color: white;
+        }
+        #distValue {
+            font-size: 36px;
+            font-weight: bold;
+            color: #00ff00;
+        }
+        #speedValue {
+            font-size: 24px;
+            color: #fff;
+            margin: 10px 0;
+        }
+        #speedTier {
+            font-size: 16px;
+            color: #888;
+        }
+
+        /* 스피드바 */
+        #speedBarContainer {
+            width: 100%;
+            margin-top: 15px;
+        }
+        #speedBar {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #speedFill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(to right, #00ff00, #ffff00, #ff0000);
+            transition: width 0.1s;
+        }
+
+        /* 코스 정보 */
+        #courseInfo {
+            width: 100%;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 12px;
+        }
+        #courseInfo div {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* 영상 위 오버레이 UI */
+        #videoOverlay {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 50;
+        }
+        #ytPanel {
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        #ytPanel input {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+        }
+        #ytPanel button {
+            padding: 8px 15px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- 왼쪽 패널 -->
+    <div id="leftPanel">
+        <div id="statusBadge">연결 대기중</div>
+
+        <div id="trackContainer">
+            <div id="track">
+                <!-- 거리 마커들 -->
+            </div>
+            <div id="characterMarker">
+                <canvas id="character" width="80" height="100"></canvas>
+            </div>
+        </div>
+
+        <div id="stats">
+            <div id="distValue">0<span style="font-size:18px">m</span></div>
+            <div id="speedValue">0 km/h</div>
+            <div id="speedTier">정지</div>
+            <div id="speedBarContainer">
+                <div id="speedBar">
+                    <div id="speedFill"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="courseInfo">
+            <div><span>목표 거리:</span><span id="goalDist">1000m</span></div>
+            <div><span>진행률:</span><span id="progress">0%</span></div>
+            <div><span>예상 시간:</span><span id="eta">--:--</span></div>
+        </div>
+    </div>
+
+    <!-- 오른쪽 영상 영역 -->
+    <div id="rightPanel">
+        <div id="youtubeContainer"></div>
+        <div id="pauseOverlay"><div id="pauseText">달려서 움직이세요! 🏃</div></div>
+
+        <div id="videoOverlay">
+            <div id="ytPanel">
+                <input type="text" id="ytUrl" placeholder="YouTube URL" value="https://www.youtube.com/watch?v=gGlylDHTjhI">
+                <button onclick="loadYouTube()">적용</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const statusBadge = document.getElementById('statusBadge');
+        const canvas = document.getElementById('character');
+        const ctx = canvas.getContext('2d');
+        const characterMarker = document.getElementById('characterMarker');
+        const track = document.getElementById('track');
+        const speedFill = document.getElementById('speedFill');
+        const speedValueDiv = document.getElementById('speedValue');
+        const distValueDiv = document.getElementById('distValue');
+        const speedTierDiv = document.getElementById('speedTier');
+        const progressDiv = document.getElementById('progress');
+        const etaDiv = document.getElementById('eta');
+        const youtubeContainer = document.getElementById('youtubeContainer');
+        const pauseOverlay = document.getElementById('pauseOverlay');
+
+        let ws = null;
+        let speed = 0;
+        let distance = 0;
+        let phoneConnected = false;
+        let ytPlayer = null;
+        let lastPlaybackRate = 0;
+        let runPhase = 0;
+
+        // 게임 설정
+        const GOAL_DISTANCE = 1000;  // 목표 거리 (m)
+        const MAX_SPEED_KMH = 50;
+        const MAX_SPEED_MS = MAX_SPEED_KMH / 3.6;
+        const SPEED_GAIN = 20;
+        const SPEED_DECAY = 0.4;
+        const FPS = 60;
+
+        // 거리 마커 생성
+        function createMarkers() {
+            const markerDistances = [0, 250, 500, 750, 1000];
+            markerDistances.forEach(dist => {
+                const marker = document.createElement('div');
+                marker.className = 'marker';
+                const percent = (dist / GOAL_DISTANCE) * 100;
+                marker.style.bottom = percent + '%';
+                marker.textContent = dist + 'm';
+                track.parentElement.appendChild(marker);
+            });
+        }
+        createMarkers();
+
+        // WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+        // YouTube API
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+
+        function extractVideoId(url) {
+            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+            const match = url.match(regex);
+            return match ? match[1] : null;
+        }
+
+        function onYouTubeIframeAPIReady() {
+            loadYouTube();
+        }
+
+        function loadYouTube() {
+            const url = document.getElementById('ytUrl').value;
+            const videoId = extractVideoId(url);
+            if (!videoId) {
+                alert('올바른 YouTube URL을 입력하세요');
+                return;
+            }
+
+            youtubeContainer.innerHTML = '<div id="ytplayer"></div>';
+
+            ytPlayer = new YT.Player('ytplayer', {
+                videoId: videoId,
+                playerVars: {
+                    autoplay: 1,
+                    mute: 1,
+                    controls: 0,
+                    loop: 1,
+                    playlist: videoId,
+                    modestbranding: 1,
+                    rel: 0,
+                    showinfo: 0,
+                    iv_load_policy: 3,
+                    disablekb: 1
+                },
+                events: {
+                    onReady: (e) => {
+                        e.target.playVideo();
+                        e.target.setPlaybackRate(0.25);
+                    },
+                    onStateChange: (e) => {
+                        if (e.data === YT.PlayerState.ENDED) {
+                            ytPlayer.seekTo(0);
+                            ytPlayer.playVideo();
+                        }
+                    }
+                }
+            });
+        }
+
+        function connect() {
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                statusBadge.textContent = '폰 대기중';
+                statusBadge.className = '';
+                ws.send(JSON.stringify({ type: 'pc' }));
+            };
+
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                if (data.type === 'step') {
+                    if (!phoneConnected) {
+                        phoneConnected = true;
+                        statusBadge.textContent = '연결됨';
+                        statusBadge.className = 'connected';
+                    }
+                    speed = Math.min(100, speed + SPEED_GAIN);
+                }
+            };
+
+            ws.onclose = () => {
+                statusBadge.textContent = '연결 끊김';
+                statusBadge.className = '';
+                phoneConnected = false;
+                setTimeout(connect, 3000);
+            };
+        }
+
+        // 졸라맨 그리기
+        function drawStickman(phase, isRunning) {
+            ctx.clearRect(0, 0, 80, 100);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+
+            const cx = 40;
+            let bounce = 0;
+
+            if (isRunning) {
+                const p = phase * Math.PI * 2;
+                bounce = Math.abs(Math.sin(p)) * 5;
+
+                // 머리
+                ctx.beginPath();
+                ctx.arc(cx + 3, 15 - bounce, 10, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 몸통
+                ctx.beginPath();
+                ctx.moveTo(cx + 2, 25 - bounce);
+                ctx.lineTo(cx + 5, 50 - bounce);
+                ctx.stroke();
+
+                const legPhase1 = Math.sin(p);
+                const legPhase2 = Math.sin(p + Math.PI);
+
+                // 다리
+                drawLimb(cx + 5, 50 - bounce, legPhase1 * 30, 20, 18);
+                drawLimb(cx + 5, 50 - bounce, legPhase2 * 30, 20, 18);
+
+                // 팔
+                drawLimb(cx + 3, 30 - bounce, -legPhase1 * 25, 12, 10);
+                drawLimb(cx + 3, 30 - bounce, -legPhase2 * 25, 12, 10);
+
+            } else {
+                // 정지
+                ctx.beginPath();
+                ctx.arc(cx, 15, 10, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(cx, 25);
+                ctx.lineTo(cx, 50);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(cx, 35);
+                ctx.lineTo(cx - 10, 48);
+                ctx.moveTo(cx, 35);
+                ctx.lineTo(cx + 10, 48);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(cx, 50);
+                ctx.lineTo(cx - 8, 75);
+                ctx.moveTo(cx, 50);
+                ctx.lineTo(cx + 8, 75);
+                ctx.stroke();
+            }
+        }
+
+        function drawLimb(x, y, angle, len1, len2) {
+            const rad = angle * Math.PI / 180;
+            const midX = x + Math.sin(rad) * len1;
+            const midY = y + Math.cos(rad) * len1;
+
+            const bendAngle = angle > 0 ? angle * 0.8 : angle * 0.3;
+            const bendRad = bendAngle * Math.PI / 180;
+            const endX = midX + Math.sin(bendRad) * len2;
+            const endY = midY + Math.cos(bendRad) * len2;
+
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(midX, midY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+        }
+
+        function gameLoop() {
+            speed = Math.max(0, speed - SPEED_DECAY);
+
+            const realSpeedKmh = (speed / 100) * MAX_SPEED_KMH;
+            const realSpeedMs = (speed / 100) * MAX_SPEED_MS;
+
+            distance += realSpeedMs / FPS;
+
+            // 목표 달성 체크
+            if (distance >= GOAL_DISTANCE) {
+                distance = GOAL_DISTANCE;
+            }
+
+            // UI 업데이트
+            speedFill.style.width = speed + '%';
+            speedValueDiv.textContent = realSpeedKmh.toFixed(1) + ' km/h';
+            distValueDiv.innerHTML = Math.floor(distance) + '<span style="font-size:18px">m</span>';
+
+            // 진행률
+            const progressPercent = Math.min(100, (distance / GOAL_DISTANCE) * 100);
+            progressDiv.textContent = progressPercent.toFixed(1) + '%';
+
+            // 캐릭터 위치 업데이트 (트랙에서)
+            characterMarker.style.bottom = progressPercent + '%';
+
+            // ETA 계산
+            if (realSpeedMs > 0.5) {
+                const remaining = GOAL_DISTANCE - distance;
+                const etaSeconds = remaining / realSpeedMs;
+                const mins = Math.floor(etaSeconds / 60);
+                const secs = Math.floor(etaSeconds % 60);
+                etaDiv.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                etaDiv.textContent = '--:--';
+            }
+
+            // 속도 단계
+            if (realSpeedKmh < 1) {
+                speedTierDiv.textContent = '정지';
+                speedTierDiv.style.color = '#888';
+            } else if (realSpeedKmh < 8) {
+                speedTierDiv.textContent = '걷기 🚶';
+                speedTierDiv.style.color = '#aaa';
+            } else if (realSpeedKmh < 15) {
+                speedTierDiv.textContent = '조깅 🏃';
+                speedTierDiv.style.color = '#4CAF50';
+            } else if (realSpeedKmh < 30) {
+                speedTierDiv.textContent = '달리기 🏃💨';
+                speedTierDiv.style.color = '#FF9800';
+            } else if (realSpeedKmh < 45) {
+                speedTierDiv.textContent = '전력질주 🔥';
+                speedTierDiv.style.color = '#f44336';
+            } else {
+                speedTierDiv.textContent = '⚡ 볼트급!! ⚡';
+                speedTierDiv.style.color = '#FFD700';
+            }
+
+            // 영상 정지/재생
+            if (speed < 3) {
+                pauseOverlay.classList.add('show');
+                if (ytPlayer && ytPlayer.pauseVideo && lastPlaybackRate !== 0) {
+                    ytPlayer.pauseVideo();
+                    lastPlaybackRate = 0;
+                }
+            } else {
+                pauseOverlay.classList.remove('show');
+                if (ytPlayer && ytPlayer.setPlaybackRate) {
+                    const playbackRate = 0.5 + (speed / 100) * 1.5;
+                    const roundedRate = Math.round(playbackRate * 4) / 4;
+                    if (roundedRate !== lastPlaybackRate) {
+                        if (lastPlaybackRate === 0) ytPlayer.playVideo();
+                        ytPlayer.setPlaybackRate(roundedRate);
+                        lastPlaybackRate = roundedRate;
+                    }
+                }
+            }
+
+            // 캐릭터 애니메이션
+            if (speed > 5) {
+                const cycleSpeed = 0.01 + speed * 0.0004;
+                runPhase = (runPhase + cycleSpeed) % 1;
+                drawStickman(runPhase, true);
+            } else {
+                runPhase = 0;
+                drawStickman(0, false);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        drawStickman(0, false);
+        connect();
+        gameLoop();
+    </script>
+</body>
+</html>

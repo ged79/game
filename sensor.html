@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>센서 컨트롤러</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        #status {
+            font-size: 18px;
+            margin-bottom: 20px;
+            padding: 12px 25px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .connected { background: #28a745; }
+        .disconnected { background: #dc3545; }
+        .connecting { background: #ffc107; color: black; }
+
+        .btn {
+            padding: 20px 40px;
+            font-size: 20px;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            margin: 10px;
+            transition: transform 0.1s;
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        #startBtn { background: #007bff; }
+        #startBtn:disabled { background: #28a745; }
+        #calibrateBtn { background: #ff9800; }
+        #calibrateBtn.recording { background: #f44336; }
+        #saveBtn { background: #28a745; display: none; }
+
+        #info {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            width: 90%;
+            max-width: 350px;
+            margin: 15px 0;
+        }
+        #accelValue {
+            font-size: 56px;
+            font-weight: bold;
+            color: #00ff00;
+            transition: color 0.1s;
+        }
+        #stepCount {
+            font-size: 16px;
+            color: #aaa;
+            margin-top: 10px;
+        }
+        #threshold {
+            font-size: 14px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        /* 캘리브레이션 패널 */
+        #calibPanel {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 350px;
+            margin: 15px 0;
+        }
+        #calibPanel h3 {
+            margin-bottom: 15px;
+            color: #ff9800;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat-label { color: #aaa; }
+        .stat-value { font-weight: bold; }
+        #dataList {
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        #instruction {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #888;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>달리기 센서</h1>
+
+    <div id="status" class="disconnected">서버 연결 안됨</div>
+
+    <button id="startBtn" class="btn">센서 시작</button>
+    <button id="calibrateBtn" class="btn">캘리브레이션 시작 (10초)</button>
+    <button id="saveBtn" class="btn">이 값으로 저장</button>
+
+    <div id="info">
+        <div>현재 가속도 변화</div>
+        <div id="accelValue">0</div>
+        <div id="stepCount">감지된 걸음: 0</div>
+        <div id="threshold">임계값: <span id="thresholdValue">12</span></div>
+    </div>
+
+    <div id="calibPanel">
+        <h3>📊 캘리브레이션 데이터</h3>
+        <div class="stat-row">
+            <span class="stat-label">상태:</span>
+            <span class="stat-value" id="calibStatus">대기 중</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">샘플 수:</span>
+            <span class="stat-value" id="sampleCount">0</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">최소값:</span>
+            <span class="stat-value" id="minValue">-</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">최대값:</span>
+            <span class="stat-value" id="maxValue">-</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">평균값:</span>
+            <span class="stat-value" id="avgValue">-</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">권장 임계값:</span>
+            <span class="stat-value" id="recommendedThreshold" style="color:#00ff00">-</span>
+        </div>
+        <div id="dataList"></div>
+    </div>
+
+    <div id="instruction">
+        1. 센서 시작 → 2. 캘리브레이션 시작 → 3. 10초간 달리기 → 4. 값 저장
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const calibrateBtn = document.getElementById('calibrateBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const accelValue = document.getElementById('accelValue');
+        const stepCountDiv = document.getElementById('stepCount');
+        const thresholdValueSpan = document.getElementById('thresholdValue');
+
+        const calibStatus = document.getElementById('calibStatus');
+        const sampleCountDiv = document.getElementById('sampleCount');
+        const minValueDiv = document.getElementById('minValue');
+        const maxValueDiv = document.getElementById('maxValue');
+        const avgValueDiv = document.getElementById('avgValue');
+        const recommendedThresholdDiv = document.getElementById('recommendedThreshold');
+        const dataList = document.getElementById('dataList');
+
+        let ws = null;
+        let lastAccel = 0;
+        let stepCount = 0;
+        let lastStepTime = 0;
+        let sensorEnabled = false;
+
+        // 현재 임계값 (로컬스토리지에서 불러오기)
+        let THRESHOLD = parseFloat(localStorage.getItem('runThreshold')) || 12;
+        thresholdValueSpan.textContent = THRESHOLD;
+
+        // 캘리브레이션 데이터
+        let isCalibrating = false;
+        let calibrationData = [];
+        let calibrationTimer = null;
+
+        // WebSocket URL
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+        function connect() {
+            statusDiv.textContent = '서버 연결 중...';
+            statusDiv.className = 'connecting';
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                statusDiv.textContent = '서버 연결됨';
+                statusDiv.className = 'connected';
+                ws.send(JSON.stringify({ type: 'phone' }));
+            };
+
+            ws.onclose = () => {
+                statusDiv.textContent = '서버 연결 끊김';
+                statusDiv.className = 'disconnected';
+                setTimeout(connect, 3000);
+            };
+
+            ws.onerror = (err) => {
+                console.error('WebSocket 에러:', err);
+            };
+        }
+
+        function startSensor() {
+            if (sensorEnabled) return;
+
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            enableMotion();
+                        } else {
+                            alert('권한이 거부되었습니다');
+                        }
+                    })
+                    .catch(err => {
+                        alert('권한 요청 오류: ' + err);
+                    });
+            } else {
+                enableMotion();
+            }
+        }
+
+        function enableMotion() {
+            sensorEnabled = true;
+            startBtn.disabled = true;
+            startBtn.textContent = '센서 활성화됨 ✓';
+            window.addEventListener('devicemotion', handleMotion);
+        }
+
+        function handleMotion(event) {
+            const acc = event.accelerationIncludingGravity;
+            if (!acc) return;
+
+            const totalAccel = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+            const accelChange = Math.abs(totalAccel - lastAccel);
+
+            accelValue.textContent = accelChange.toFixed(1);
+
+            // 색상 표시
+            if (accelChange > THRESHOLD) {
+                accelValue.style.color = '#ff4444';
+            } else if (accelChange > THRESHOLD * 0.5) {
+                accelValue.style.color = '#ffff00';
+            } else {
+                accelValue.style.color = '#00ff00';
+            }
+
+            // 캘리브레이션 중이면 데이터 수집
+            if (isCalibrating && accelChange > 2) {  // 노이즈 필터링
+                calibrationData.push(accelChange);
+                updateCalibrationStats();
+            }
+
+            const now = Date.now();
+
+            // 걸음 감지
+            if (accelChange > THRESHOLD && now - lastStepTime > 200) {
+                lastStepTime = now;
+                stepCount++;
+                stepCountDiv.textContent = `감지된 걸음: ${stepCount}`;
+
+                // 서버로 전송
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'step',
+                        accel: accelChange,
+                        time: now
+                    }));
+                }
+            }
+
+            lastAccel = totalAccel;
+        }
+
+        function startCalibration() {
+            if (!sensorEnabled) {
+                alert('먼저 센서를 시작하세요!');
+                return;
+            }
+
+            if (isCalibrating) {
+                // 중단
+                stopCalibration();
+                return;
+            }
+
+            // 시작
+            isCalibrating = true;
+            calibrationData = [];
+            calibrateBtn.textContent = '중단 (녹화 중...)';
+            calibrateBtn.classList.add('recording');
+            calibStatus.textContent = '녹화 중... 달리세요!';
+            calibStatus.style.color = '#ff4444';
+            dataList.innerHTML = '';
+
+            // 10초 후 자동 종료
+            calibrationTimer = setTimeout(() => {
+                stopCalibration();
+            }, 10000);
+
+            // 카운트다운
+            let seconds = 10;
+            const countdown = setInterval(() => {
+                seconds--;
+                if (seconds > 0) {
+                    calibrateBtn.textContent = `중단 (${seconds}초 남음)`;
+                } else {
+                    clearInterval(countdown);
+                }
+            }, 1000);
+        }
+
+        function stopCalibration() {
+            isCalibrating = false;
+            calibrateBtn.textContent = '캘리브레이션 시작 (10초)';
+            calibrateBtn.classList.remove('recording');
+
+            if (calibrationTimer) {
+                clearTimeout(calibrationTimer);
+                calibrationTimer = null;
+            }
+
+            if (calibrationData.length > 10) {
+                calibStatus.textContent = '완료!';
+                calibStatus.style.color = '#00ff00';
+                saveBtn.style.display = 'block';
+                updateCalibrationStats();
+            } else {
+                calibStatus.textContent = '데이터 부족 - 다시 시도하세요';
+                calibStatus.style.color = '#ff9800';
+            }
+        }
+
+        function updateCalibrationStats() {
+            if (calibrationData.length === 0) return;
+
+            const sorted = [...calibrationData].sort((a, b) => a - b);
+            const min = sorted[0];
+            const max = sorted[sorted.length - 1];
+            const avg = calibrationData.reduce((a, b) => a + b, 0) / calibrationData.length;
+
+            // 상위 70% 값의 평균을 임계값으로 권장 (너무 작은 움직임 제외)
+            const threshold70 = sorted[Math.floor(sorted.length * 0.3)];
+            const recommended = Math.round(threshold70 * 0.8 * 10) / 10;  // 약간 여유있게
+
+            sampleCountDiv.textContent = calibrationData.length;
+            minValueDiv.textContent = min.toFixed(1);
+            maxValueDiv.textContent = max.toFixed(1);
+            avgValueDiv.textContent = avg.toFixed(1);
+            recommendedThresholdDiv.textContent = recommended.toFixed(1);
+
+            // 최근 데이터 표시
+            const recentData = calibrationData.slice(-20).map(v => v.toFixed(1)).join(', ');
+            dataList.textContent = recentData;
+        }
+
+        function saveThreshold() {
+            const recommended = parseFloat(recommendedThresholdDiv.textContent);
+            if (isNaN(recommended) || recommended <= 0) {
+                alert('유효한 값이 없습니다');
+                return;
+            }
+
+            THRESHOLD = recommended;
+            localStorage.setItem('runThreshold', THRESHOLD);
+            thresholdValueSpan.textContent = THRESHOLD;
+
+            alert(`임계값이 ${THRESHOLD}로 저장되었습니다!\n\n이제 이 설정으로 게임을 즐기세요.`);
+            saveBtn.style.display = 'none';
+        }
+
+        startBtn.addEventListener('click', startSensor);
+        calibrateBtn.addEventListener('click', startCalibration);
+        saveBtn.addEventListener('click', saveThreshold);
+
+        // 페이지 로드 시 서버 연결
+        connect();
+    </script>
+</body>
+</html>

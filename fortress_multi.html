@@ -1,0 +1,3123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortress Multiplayer (10P)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background: #1a1a2e;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+        }
+
+        /* 로비 UI */
+        #lobby {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        #lobby h1 {
+            color: #FFD700;
+            font-size: 48px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #lobby .subtitle {
+            color: #aaa;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        .team-container {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 30px;
+        }
+        .team-box {
+            width: 280px;
+            min-height: 300px;
+            border-radius: 15px;
+            padding: 20px;
+        }
+        .team-red {
+            background: rgba(244, 67, 54, 0.2);
+            border: 3px solid #F44336;
+        }
+        .team-blue {
+            background: rgba(33, 150, 243, 0.2);
+            border: 3px solid #2196F3;
+        }
+        .team-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .team-red .team-title { color: #F44336; }
+        .team-blue .team-title { color: #2196F3; }
+
+        .player-slot {
+            background: rgba(255,255,255,0.1);
+            padding: 10px 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .player-slot.empty {
+            color: #666;
+            border: 2px dashed #444;
+            background: transparent;
+        }
+        .player-slot .ready-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            margin-left: auto;
+        }
+        .player-slot .not-ready {
+            background: #666;
+        }
+
+        #startGameBtn {
+            padding: 20px 60px;
+            font-size: 24px;
+            background: linear-gradient(145deg, #4CAF50, #388E3C);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        #startGameBtn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(76, 175, 80, 0.4);
+        }
+        #startGameBtn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #connectionStatus {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+            z-index: 101;
+        }
+        #connectionStatus.connected { background: #4CAF50; }
+        #connectionStatus.disconnected { background: #F44336; }
+
+        #qrCode {
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+        }
+        #joinUrl {
+            color: #4CAF50;
+            font-size: 14px;
+            margin-top: 10px;
+            word-break: break-all;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        /* 게임 UI */
+        #gameUI {
+            display: none;
+        }
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 20px;
+            border-radius: 15px;
+            font-size: 14px;
+            max-width: 200px;
+        }
+        #ui div { margin: 5px 0; }
+        .val { color: #0f0; font-weight: bold; }
+
+        #teamScores {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 30px;
+            z-index: 10;
+        }
+        .team-score {
+            padding: 15px 30px;
+            border-radius: 10px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .team-score.red { background: rgba(244, 67, 54, 0.8); }
+        .team-score.blue { background: rgba(33, 150, 243, 0.8); }
+        .team-score .lives {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        #playerList {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        #playerList h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .player-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+        .player-item:last-child { border-bottom: none; }
+        .player-item .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .player-item .dot.red { background: #F44336; }
+        .player-item .dot.blue { background: #2196F3; }
+        .player-item .lives-indicator {
+            margin-left: auto;
+            color: #4CAF50;
+        }
+        .player-item.eliminated {
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+
+        #message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px black;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 50;
+        }
+        #message.show {
+            opacity: 1;
+            animation: popIn 0.5s ease-out;
+        }
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0.5); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        #gameOverScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 99;
+        }
+        #gameOverScreen h1 {
+            font-size: 72px;
+            margin-bottom: 20px;
+        }
+        #gameOverScreen h1.red { color: #F44336; }
+        #gameOverScreen h1.blue { color: #2196F3; }
+        #gameOverScreen .stats {
+            color: #aaa;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+        #restartBtn {
+            padding: 20px 50px;
+            font-size: 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+        }
+
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="connectionStatus" class="disconnected">연결 중...</div>
+
+    <!-- 로비 화면 -->
+    <div id="lobby">
+        <h1>FORTRESS BATTLE</h1>
+        <div class="subtitle">10인 멀티플레이 - 5 vs 5 팀전</div>
+
+        <div class="team-container">
+            <div class="team-box team-red">
+                <div class="team-title">RED TEAM</div>
+                <div id="redTeamSlots"></div>
+            </div>
+            <div class="team-box team-blue">
+                <div class="team-title">BLUE TEAM</div>
+                <div id="blueTeamSlots"></div>
+            </div>
+        </div>
+
+        <button id="startGameBtn" disabled>게임 시작 (최소 1명 필요)</button>
+
+        <div id="joinUrl"></div>
+    </div>
+
+    <!-- 게임 UI -->
+    <div id="gameUI">
+        <div id="ui">
+            <div>바람: <span class="val" id="windVal">→ 0</span></div>
+            <div>지형: <span class="val" id="terrainVal">-</span></div>
+        </div>
+
+        <div id="teamScores">
+            <div class="team-score red">
+                <div>RED</div>
+                <div class="lives" id="redLives">Lives: 15</div>
+            </div>
+            <div class="team-score blue">
+                <div>BLUE</div>
+                <div class="lives" id="blueLives">Lives: 15</div>
+            </div>
+        </div>
+
+        <div id="playerList">
+            <h3>플레이어</h3>
+            <div id="playerListContent"></div>
+        </div>
+    </div>
+
+    <div id="message"></div>
+
+    <div id="gameOverScreen">
+        <h1 id="winnerTitle">RED TEAM WIN!</h1>
+        <div class="stats" id="gameStats"></div>
+        <button id="restartBtn">다시 시작</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI 요소
+        const lobby = document.getElementById('lobby');
+        const gameUI = document.getElementById('gameUI');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const redTeamSlots = document.getElementById('redTeamSlots');
+        const blueTeamSlots = document.getElementById('blueTeamSlots');
+        const startGameBtn = document.getElementById('startGameBtn');
+        const joinUrl = document.getElementById('joinUrl');
+        const windVal = document.getElementById('windVal');
+        const terrainVal = document.getElementById('terrainVal');
+        const redLives = document.getElementById('redLives');
+        const blueLives = document.getElementById('blueLives');
+        const playerListContent = document.getElementById('playerListContent');
+        const messageDiv = document.getElementById('message');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const winnerTitle = document.getElementById('winnerTitle');
+        const gameStats = document.getElementById('gameStats');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // 캔버스 크기
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // 게임 상태
+        let ws = null;
+        let gameActive = false;
+        let players = {};  // {player_id: {team, name, tank, lives, ready}}
+        let aiTanks = [];  // AI 탱크 배열
+        let projectiles = [];  // 여러 포탄 동시 처리
+        let explosions = [];
+        let tankDebris = [];
+        let wind = 0;
+        let teamSize = 3;  // 기본 팀 사이즈
+        let aiLevel = 1;   // AI 난이도 (1-10)
+        let audioUnlocked = false;    // 오디오 활성화 여부
+
+        // 배경 요소들
+        const MAX_WIND_PARTICLES = 50;
+        let clouds = [];
+        let mountains = [];
+        let trees = [];
+        let windParticles = [];
+        let sunAngle = 0;
+
+        // 장애물
+        let obstacles = [];
+
+        // 머즐 플래시 & 연기
+        let muzzleFlashes = [];  // 여러 플레이어 동시 발사 지원
+        let smokeParticles = [];
+
+        // 맵 설정 (확장)
+        const MAP_WIDTH = canvas.width * 2;
+        const MAP_HEIGHT = canvas.height;
+
+        // 기준 해상도 (1920x1080 기준)
+        const BASE_WIDTH = 3840; // 1920 * 2
+        const SPEED_SCALE = MAP_WIDTH / BASE_WIDTH;
+
+        // 지형
+        const terrainPoints = [];
+        const terrainSegments = 200;
+        let currentTerrainType = 'hills';
+
+        // 물리 상수 (맵 크기에 따라 스케일링)
+        const GRAVITY = 0.3 * SPEED_SCALE;
+        const AIR_RESISTANCE = 0.99;
+
+        // 쿨다운 설정 (실시간 전투)
+        const FIRE_COOLDOWN = 2000;  // 2초
+
+        // 팀 색상 배열 (따뜻한 계열 vs 차가운 계열)
+        const RED_TEAM_COLORS = [
+            '#FF0000',  // 빨강
+            '#FFCC00',  // 노랑
+            '#FF00FF',  // 마젠타
+            '#9933FF',  // 보라
+            '#FF69B4',  // 핑크
+        ];
+
+        const BLUE_TEAM_COLORS = [
+            '#0066FF',  // 파랑
+            '#00FFFF',  // 시안
+            '#00CCCC',  // 틸
+            '#00CC66',  // 녹색
+            '#000080',  // 군청색
+        ];
+
+        // 기본 팀 색상 (UI 등에서 사용)
+        const TEAM_COLORS = {
+            red: '#F44336',
+            blue: '#2196F3'
+        };
+
+        // URL에서 내 플레이어 이름 가져오기 (?me=이름) - 마커 표시용
+        const urlParams = new URLSearchParams(window.location.search);
+        const myPlayerName = urlParams.get('me');
+
+        // 스폰 위치
+        function getSpawnPositions(team, index) {
+            const baseX = team === 'red' ? 100 : MAP_WIDTH - 200;
+            const spacing = 120;
+            const x = baseX + (index % 3) * spacing * (team === 'red' ? 1 : -1);
+            return { x, y: 0 };
+        }
+
+        // 지형 타입들
+        const terrainTypes = ['hills', 'valley', 'mountain', 'plateau', 'canyon', 'dunes', 'stairs', 'cliffs'];
+        const terrainNames = {
+            'hills': '언덕', 'valley': '계곡', 'mountain': '산악',
+            'plateau': '고원', 'canyon': '협곡', 'dunes': '사막',
+            'stairs': '계단', 'cliffs': '절벽'
+        };
+
+        // 지형별 색상
+        const terrainColors = {
+            'hills': ['#4CAF50', '#388E3C', '#2E7D32', '#1B5E20'],
+            'valley': ['#66BB6A', '#4CAF50', '#43A047', '#388E3C'],
+            'mountain': ['#78909C', '#607D8B', '#546E7A', '#455A64'],
+            'plateau': ['#8D6E63', '#795548', '#6D4C41', '#5D4037'],
+            'canyon': ['#A1887F', '#8D6E63', '#795548', '#5D4037'],
+            'dunes': ['#FFD54F', '#FFCA28', '#FFC107', '#FFB300'],
+            'stairs': ['#7E57C2', '#673AB7', '#5E35B1', '#4527A0'],
+            'cliffs': ['#90A4AE', '#78909C', '#607D8B', '#546E7A']
+        };
+
+        // 지형 하이라이트 색상
+        const terrainHighlightColors = {
+            'hills': '#81C784', 'valley': '#A5D6A7', 'mountain': '#B0BEC5',
+            'plateau': '#BCAAA4', 'canyon': '#D7CCC8', 'dunes': '#FFE082',
+            'stairs': '#B39DDB', 'cliffs': '#B0BEC5'
+        };
+
+        // 지형 디테일 색상
+        const terrainDetailColors = {
+            'hills': '#1e7b1e', 'valley': '#2E7D32', 'mountain': '#546E7A',
+            'plateau': '#4E342E', 'canyon': '#6D4C41', 'dunes': '#F9A825',
+            'stairs': '#4527A0', 'cliffs': '#455A64'
+        };
+
+        // 배경 초기화
+        function initBackground() {
+            // 구름 생성
+            clouds = [];
+            for (let i = 0; i < 8; i++) {
+                clouds.push({
+                    x: Math.random() * MAP_WIDTH,
+                    y: 30 + Math.random() * 120,
+                    width: 80 + Math.random() * 120,
+                    height: 30 + Math.random() * 30,
+                    speed: 0.2 + Math.random() * 0.3,
+                    opacity: 0.6 + Math.random() * 0.3
+                });
+            }
+
+            // 산 생성
+            mountains = [];
+            for (let i = 0; i < 5; i++) {
+                mountains.push({
+                    x: i * (MAP_WIDTH / 4) - 50 + Math.random() * 100,
+                    height: 150 + Math.random() * 100,
+                    width: 200 + Math.random() * 150,
+                    layer: 0,
+                    color: '#6B8E9F'
+                });
+            }
+            for (let i = 0; i < 4; i++) {
+                mountains.push({
+                    x: i * (MAP_WIDTH / 3) + Math.random() * 100,
+                    height: 100 + Math.random() * 80,
+                    width: 180 + Math.random() * 120,
+                    layer: 1,
+                    color: '#5A7D8C'
+                });
+            }
+
+            // 나무 생성
+            trees = [];
+            for (let i = 0; i < 25; i++) {
+                trees.push({
+                    x: Math.random() * MAP_WIDTH,
+                    size: 15 + Math.random() * 25,
+                    type: Math.random() > 0.5 ? 'pine' : 'round'
+                });
+            }
+
+            windParticles = [];
+            smokeParticles = [];
+            muzzleFlashes = [];
+        }
+
+        // 장애물 생성
+        function generateObstacles() {
+            obstacles = [];
+            const numObstacles = 8 + Math.floor(Math.random() * 6);  // 8~13개 (많이 생성)
+
+            for (let i = 0; i < numObstacles; i++) {
+                const minX = 300;
+                const maxX = MAP_WIDTH - 400;
+                const x = minX + Math.random() * (maxX - minX);
+                const terrainY = getTerrainY(x);
+
+                const type = Math.random() > 0.5 ? 'rock' : 'wall';
+
+                if (type === 'rock') {
+                    const width = 40 + Math.random() * 60;  // 40~100
+                    const height = 30 + Math.random() * 50; // 30~80
+                    const size = (width + height) / 2;
+                    const hp = Math.ceil(size / 25);  // 크기에 비례 (2~7)
+
+                    obstacles.push({
+                        type: 'rock',
+                        x: x,
+                        y: terrainY,
+                        width: width,
+                        height: height,
+                        hp: hp,
+                        maxHp: hp
+                    });
+                } else {
+                    const width = 20 + Math.random() * 20;   // 20~40
+                    const height = 60 + Math.random() * 80;  // 60~140
+                    const hp = Math.ceil(height / 35);  // 높이에 비례 (2~4)
+
+                    obstacles.push({
+                        type: 'wall',
+                        x: x,
+                        y: terrainY - height,
+                        width: width,
+                        height: height,
+                        hp: hp,
+                        maxHp: hp
+                    });
+                }
+            }
+        }
+
+        // 장애물 충돌 체크 (충돌한 장애물 반환)
+        function checkObstacleCollision(px, py) {
+            for (let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
+                if (obs.type === 'rock') {
+                    const cx = obs.x;
+                    const cy = obs.y;
+                    const rx = obs.width / 2;
+                    const ry = obs.height;
+                    const dx = (px - cx) / rx;
+                    const dy = (py - cy) / ry;
+                    if (dx * dx + dy * dy < 1 && py > cy - ry) {
+                        return { hit: true, obstacle: obs, index: i };
+                    }
+                } else {
+                    if (px > obs.x && px < obs.x + obs.width &&
+                        py > obs.y && py < obs.y + obs.height) {
+                        return { hit: true, obstacle: obs, index: i };
+                    }
+                }
+            }
+            return { hit: false };
+        }
+
+        // 장애물 데미지 처리
+        function damageObstacle(index) {
+            if (index < 0 || index >= obstacles.length) return;
+
+            const obs = obstacles[index];
+            obs.hp--;
+
+            // 파괴 효과
+            createObstacleDebris(obs.x, obs.y, obs.type);
+
+            if (obs.hp <= 0) {
+                // 장애물 파괴
+                obstacles.splice(index, 1);
+                playExplosionSound();
+            } else {
+                playHitSound();
+            }
+        }
+
+        // 장애물 파편 생성
+        function createObstacleDebris(x, y, type) {
+            const color = type === 'rock' ? '#666' : '#8B4513';
+            for (let i = 0; i < 8; i++) {
+                tankDebris.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: -Math.random() * 8 - 3,
+                    size: 5 + Math.random() * 10,
+                    color: color,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotationSpeed: (Math.random() - 0.5) * 0.2,
+                    alpha: 1
+                });
+            }
+        }
+
+        // 크레이터 저장 (시각 효과용)
+        let craters = [];
+
+        // 지형 파괴 (크레이터 생성)
+        function deformTerrain(x, power, radius) {
+            // 파워에 따른 크레이터 크기 (파워 높을수록 큼)
+            const actualRadius = radius * (0.8 + power / 100 * 0.8);  // 80~160% 크기
+            const craterDepth = actualRadius * 0.7;  // 더 깊게
+
+            // 흙 파티클 생성
+            createDirtParticles(x, getTerrainY(x), actualRadius);
+
+            // 지형 변형
+            for (let i = 0; i < terrainPoints.length; i++) {
+                const point = terrainPoints[i];
+                const distance = Math.abs(point.x - x);
+
+                if (distance < actualRadius) {
+                    // 크레이터 형태로 지형 파괴 (부드러운 곡선)
+                    const factor = 1 - (distance / actualRadius);
+                    const depression = craterDepth * factor * factor;
+                    point.y += depression;
+                }
+            }
+
+            // 크레이터 시각 효과 저장
+            craters.push({
+                x: x,
+                y: getTerrainY(x),
+                radius: actualRadius,
+                alpha: 1
+            });
+
+            // 오래된 크레이터 제거 (최대 30개)
+            if (craters.length > 30) {
+                craters.shift();
+            }
+
+            // 모든 탱크 위치 업데이트 (지형 변화 반영)
+            updateAllTankPositions();
+        }
+
+        // 흙/먼지 파티클 생성
+        function createDirtParticles(x, y, radius) {
+            const particleCount = Math.floor(radius / 3);
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI;  // 위쪽으로만
+                const speed = 3 + Math.random() * 8;
+                const size = 4 + Math.random() * 8;
+
+                tankDebris.push({
+                    x: x + (Math.random() - 0.5) * radius,
+                    y: y,
+                    vx: Math.cos(angle) * speed * (Math.random() - 0.5) * 2,
+                    vy: -Math.sin(angle) * speed,
+                    size: size,
+                    color: Math.random() > 0.5 ? '#8B7355' : '#6B5344',  // 흙 색상
+                    rotation: Math.random() * Math.PI * 2,
+                    rotationSpeed: (Math.random() - 0.5) * 0.3,
+                    alpha: 1
+                });
+            }
+        }
+
+        // 모든 탱크 위치 업데이트
+        function updateAllTankPositions() {
+            // 플레이어 탱크
+            for (const [id, p] of Object.entries(players)) {
+                if (p.tank && !p.tank.eliminated) {
+                    updateTankTerrainPosition(p.tank);
+                }
+            }
+
+            // AI 탱크
+            for (const ai of aiTanks) {
+                if (!ai.eliminated) {
+                    updateTankTerrainPosition(ai);
+                }
+            }
+        }
+
+        // 탱크 파편 생성
+        function createTankDebris(x, y, color) {
+            for (let i = 0; i < 15; i++) {
+                tankDebris.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 15,
+                    vy: -Math.random() * 10 - 5,
+                    size: 5 + Math.random() * 15,
+                    color: color,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotationSpeed: (Math.random() - 0.5) * 0.3,
+                    alpha: 1
+                });
+            }
+        }
+
+        // 구름 그리기
+        function drawCloud(cloud) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${cloud.opacity})`;
+            const cx = cloud.x;
+            const cy = cloud.y;
+            ctx.beginPath();
+            ctx.arc(cx, cy, cloud.height * 0.8, 0, Math.PI * 2);
+            ctx.arc(cx - cloud.width * 0.25, cy + 5, cloud.height * 0.6, 0, Math.PI * 2);
+            ctx.arc(cx + cloud.width * 0.25, cy + 5, cloud.height * 0.7, 0, Math.PI * 2);
+            ctx.arc(cx - cloud.width * 0.4, cy + 10, cloud.height * 0.4, 0, Math.PI * 2);
+            ctx.arc(cx + cloud.width * 0.4, cy + 8, cloud.height * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 산 그리기
+        function drawMountain(m) {
+            const baseY = canvas.height - 200;
+            ctx.fillStyle = m.color;
+            ctx.beginPath();
+            ctx.moveTo(m.x - m.width / 2, baseY);
+            ctx.lineTo(m.x, baseY - m.height);
+            ctx.lineTo(m.x + m.width / 2, baseY);
+            ctx.closePath();
+            ctx.fill();
+
+            if (m.height > 120) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.moveTo(m.x - m.width * 0.1, baseY - m.height + 30);
+                ctx.lineTo(m.x, baseY - m.height);
+                ctx.lineTo(m.x + m.width * 0.1, baseY - m.height + 30);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        // 태양 그리기
+        function drawSun() {
+            const sunX = canvas.width - 120;
+            const sunY = 100;
+            const radius = 40;
+
+            ctx.save();
+            ctx.translate(sunX, sunY);
+            ctx.rotate(sunAngle);
+
+            for (let i = 0; i < 12; i++) {
+                ctx.fillStyle = 'rgba(255, 200, 50, 0.3)';
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(-15, -radius - 30);
+                ctx.lineTo(15, -radius - 30);
+                ctx.closePath();
+                ctx.fill();
+                ctx.rotate(Math.PI / 6);
+            }
+            ctx.restore();
+
+            const sunGradient = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, radius);
+            sunGradient.addColorStop(0, '#FFF5B8');
+            sunGradient.addColorStop(0.5, '#FFD93D');
+            sunGradient.addColorStop(1, '#FF8C00');
+            ctx.fillStyle = sunGradient;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            sunAngle += 0.005;
+        }
+
+        // 나무 그리기
+        function drawTree(tree, groundY) {
+            const x = tree.x;
+            const y = groundY;
+            const size = tree.size;
+
+            ctx.fillStyle = '#5D4037';
+            ctx.fillRect(x - size * 0.1, y - size * 0.5, size * 0.2, size * 0.5);
+
+            if (tree.type === 'pine') {
+                ctx.fillStyle = '#2E7D32';
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, y - size * (0.5 + i * 0.4));
+                    ctx.lineTo(x - size * (0.4 - i * 0.1), y - size * (0.3 + i * 0.3));
+                    ctx.lineTo(x + size * (0.4 - i * 0.1), y - size * (0.3 + i * 0.3));
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            } else {
+                ctx.fillStyle = '#388E3C';
+                ctx.beginPath();
+                ctx.arc(x, y - size * 0.8, size * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#2E7D32';
+                ctx.beginPath();
+                ctx.arc(x - size * 0.2, y - size * 0.9, size * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 바람 파티클 생성
+        function spawnWindParticle() {
+            if (Math.abs(wind) < 0.5) return;
+            const speed = Math.abs(wind);
+            if (Math.random() > speed / 10) return;
+
+            const fromLeft = wind > 0;
+            windParticles.push({
+                x: fromLeft ? -20 : MAP_WIDTH + 20,
+                y: Math.random() * (canvas.height * 0.7),
+                size: 2 + Math.random() * 3,
+                speed: speed * (0.8 + Math.random() * 0.4),
+                alpha: 0.3 + Math.random() * 0.4,
+                type: Math.random() > 0.7 ? 'leaf' : 'dust'
+            });
+        }
+
+        // 바람 파티클 업데이트
+        function updateWindParticles() {
+            for (let i = 0; i < 3; i++) {
+                if (windParticles.length < MAX_WIND_PARTICLES) {
+                    spawnWindParticle();
+                }
+            }
+
+            for (let i = windParticles.length - 1; i >= 0; i--) {
+                const p = windParticles[i];
+                const dir = wind > 0 ? 1 : -1;
+
+                p.x += p.speed * 3 * dir;
+                p.y += Math.sin(p.x * 0.02) * 0.5;
+
+                if (p.type === 'leaf') {
+                    p.rotation = (p.rotation || 0) + 0.1 * dir;
+                }
+
+                if ((wind > 0 && p.x > MAP_WIDTH + 30) || (wind < 0 && p.x < -30)) {
+                    windParticles.splice(i, 1);
+                }
+            }
+        }
+
+        // 색상 밝게
+        function lightenColor(color, percent) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = Math.min(255, (num >> 16) + amt);
+            const G = Math.min(255, ((num >> 8) & 0x00FF) + amt);
+            const B = Math.min(255, (num & 0x0000FF) + amt);
+            return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+        }
+
+        // 색상 어둡게
+        function darkenColor(color, percent) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = Math.max(0, (num >> 16) - amt);
+            const G = Math.max(0, ((num >> 8) & 0x00FF) - amt);
+            const B = Math.max(0, (num & 0x0000FF) - amt);
+            return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+        }
+
+        // 지형 생성
+        function generateTerrain() {
+            terrainPoints.length = 0;
+            const baseY = canvas.height - 150;
+            currentTerrainType = terrainTypes[Math.floor(Math.random() * terrainTypes.length)];
+            terrainVal.textContent = terrainNames[currentTerrainType];
+
+            for (let i = 0; i <= terrainSegments; i++) {
+                const x = (MAP_WIDTH / terrainSegments) * i;
+                const normalizedX = i / terrainSegments;
+                let y = baseY;
+
+                switch (currentTerrainType) {
+                    case 'hills':
+                        y += Math.sin(normalizedX * Math.PI * 4) * 50;
+                        y += Math.sin(normalizedX * Math.PI * 8) * 25;
+                        break;
+                    case 'valley':
+                        y += Math.sin(normalizedX * Math.PI) * 80;
+                        break;
+                    case 'mountain':
+                        y -= Math.sin(normalizedX * Math.PI) * 100;
+                        break;
+                    case 'plateau':
+                        if (normalizedX > 0.3 && normalizedX < 0.7) y -= 60;
+                        break;
+                    case 'canyon':
+                        y += Math.pow(Math.abs(normalizedX - 0.5) * 2, 0.5) * 80 - 40;
+                        break;
+                    case 'dunes':
+                        y += Math.sin(normalizedX * Math.PI * 3) * 40;
+                        y += Math.sin(normalizedX * Math.PI * 6) * 20;
+                        break;
+                    case 'stairs':
+                        const steps = 5;
+                        const stepIndex = Math.floor(normalizedX * steps);
+                        const stepHeight = (stepIndex % 2 === 0) ? -30 : 30;
+                        y += stepHeight + (stepIndex - steps/2) * 15;
+                        y += Math.sin(normalizedX * Math.PI * 10) * 8;
+                        break;
+                    case 'cliffs':
+                        if (normalizedX < 0.35) {
+                            y -= 50;
+                        } else if (normalizedX < 0.4) {
+                            y -= 50 + (normalizedX - 0.35) * 20 * 100;
+                        } else if (normalizedX < 0.6) {
+                            y += 50;
+                        } else if (normalizedX < 0.65) {
+                            y += 50 - (normalizedX - 0.6) * 20 * 100;
+                        } else {
+                            y -= 50;
+                        }
+                        y += Math.sin(normalizedX * Math.PI * 8) * 12;
+                        break;
+                }
+
+                // 양끝 평탄화
+                if (i < 15 || i > terrainSegments - 15) {
+                    const edge = i < 15 ? i : terrainSegments - i;
+                    y = baseY + (y - baseY) * (edge / 15);
+                }
+
+                terrainPoints.push({ x, y });
+            }
+        }
+
+        function getTerrainY(x) {
+            if (x <= 0) return terrainPoints[0]?.y || canvas.height - 150;
+            if (x >= MAP_WIDTH) return terrainPoints[terrainPoints.length - 1]?.y || canvas.height - 150;
+
+            const segmentWidth = MAP_WIDTH / terrainSegments;
+            const index = Math.floor(x / segmentWidth);
+            const nextIndex = Math.min(index + 1, terrainPoints.length - 1);
+
+            const p1 = terrainPoints[index];
+            const p2 = terrainPoints[nextIndex];
+            if (!p1 || !p2) return canvas.height - 150;
+
+            const t = (x - p1.x) / (p2.x - p1.x || 1);
+            return p1.y + (p2.y - p1.y) * t;
+        }
+
+        // 지형 기울기 계산 (라디안)
+        function getTerrainAngle(x, width) {
+            const leftY = getTerrainY(x);
+            const rightY = getTerrainY(x + width);
+            return Math.atan2(rightY - leftY, width);
+        }
+
+        // 탱크 위치 업데이트 (지형에 맞춤) - 부드러운 이동 + 부드러운 회전
+        function updateTankTerrainPosition(tank) {
+            const centerX = tank.x + tank.width / 2;
+            const terrainY = getTerrainY(centerX);
+            const targetY = terrainY - tank.height;
+            const targetAngle = getTerrainAngle(tank.x, tank.width);
+
+            // Y 위치 부드러운 보간 (20% 씩 목표에 접근)
+            tank.y += (targetY - tank.y) * 0.2;
+            if (Math.abs(targetY - tank.y) < 1) {
+                tank.y = targetY;
+            }
+
+            // 기울기 각도 부드러운 보간 (15% 씩 목표에 접근)
+            if (tank.terrainAngle === undefined) {
+                tank.terrainAngle = targetAngle;
+            } else {
+                tank.terrainAngle += (targetAngle - tank.terrainAngle) * 0.15;
+                if (Math.abs(targetAngle - tank.terrainAngle) < 0.01) {
+                    tank.terrainAngle = targetAngle;
+                }
+            }
+        }
+
+        // 경사에 따른 이동 속도 계산
+        function getMovementSpeed(tank, direction) {
+            const baseSpeed = 8;
+            const terrainAngle = tank.terrainAngle || 0;
+            // Canvas Y좌표는 아래로 증가하므로 부호 반전
+            const slopeFactor = Math.sin(terrainAngle);
+
+            // direction: 'left' = -1, 'right' = 1
+            const moveDir = direction === 'right' ? 1 : -1;
+
+            // 경사 영향 계산 (Canvas 좌표계 보정: + 로 변경)
+            // 오르막: 속도 감소, 내리막: 속도 증가
+            const slopeEffect = slopeFactor * moveDir;
+
+            // 급경사일수록 영향 크게 (최대 ±50% 속도 변화)
+            const speedMultiplier = 1 + slopeEffect * 0.5;
+
+            // 최소 속도 4, 최대 속도 12
+            return Math.max(4, Math.min(12, baseSpeed * speedMultiplier));
+        }
+
+        // 탱크 생성
+        function createTank(playerId, team, name, spawnIndex) {
+            const spawn = getSpawnPositions(team, spawnIndex);
+            const terrainY = getTerrainY(spawn.x);
+            const terrainAngle = getTerrainAngle(spawn.x, 60);
+
+            // 팀 내 인덱스에 따라 다른 색상 할당
+            const colorArray = team === 'red' ? RED_TEAM_COLORS : BLUE_TEAM_COLORS;
+            const tankColor = colorArray[spawnIndex % colorArray.length];
+
+            return {
+                id: playerId,
+                team: team,
+                name: name,
+                x: spawn.x,
+                y: terrainY - 30,
+                width: 60,
+                height: 30,
+                color: tankColor,
+                lives: 3,
+                hp: 100,
+                angle: team === 'red' ? 45 : 135,
+                power: 100,
+                cooldown: 0,
+                eliminated: false,
+                damaged: false,
+                damageTimer: 0,
+                terrainAngle: terrainAngle
+            };
+        }
+
+        // WebSocket 연결
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${location.host}/ws`;
+
+        function connect() {
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                connectionStatus.textContent = '연결됨';
+                connectionStatus.className = 'connected';
+                ws.send(JSON.stringify({ type: 'fortress_multi_game' }));
+
+                // 컨트롤러 접속 URL 표시
+                const controlUrl = `${location.origin}/fortress_control_multi.html`;
+                joinUrl.textContent = `컨트롤러: ${controlUrl}`;
+            };
+
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                handleMessage(data);
+            };
+
+            ws.onclose = () => {
+                connectionStatus.textContent = '연결 끊김';
+                connectionStatus.className = 'disconnected';
+                setTimeout(connect, 3000);
+            };
+        }
+
+        function handleMessage(data) {
+            switch (data.type) {
+                case 'player_list':
+                    updatePlayerList(data.players);
+                    break;
+
+                case 'game_start':
+                    // 바로 게임 시작 (클릭하면 소리 활성화됨)
+                    startGame(data.players);
+                    break;
+
+                case 'game_restart':
+                    aiLevel = 1;  // 레벨 초기화
+                    resetToLobby();
+                    break;
+
+                case 'angle':
+                    if (players[data.player_id]?.tank) {
+                        players[data.player_id].tank.angle = data.angle;
+                    }
+                    break;
+
+                case 'power':
+                    if (players[data.player_id]?.tank) {
+                        players[data.player_id].tank.power = data.power;
+                    }
+                    break;
+
+                case 'fire_fortress':
+                    handleFire(data.player_id, data.angle, data.power);
+                    break;
+
+                case 'move':
+                    handleMove(data.player_id, data.direction);
+                    break;
+
+                case 'request_restart':
+                    // 게임 재시작 요청 처리 (폰에서 요청)
+                    aiLevel = 1;  // 레벨 초기화
+                    resetToLobby();
+                    break;
+            }
+        }
+
+        // 로비에서 플레이어 목록 업데이트
+        function updatePlayerList(serverPlayers) {
+            players = {};
+
+            let redCount = 0, blueCount = 0;
+            let redReady = 0, blueReady = 0;
+
+            for (const [id, p] of Object.entries(serverPlayers)) {
+                players[id] = { ...p };
+                if (p.team === 'red') {
+                    redCount++;
+                    if (p.ready) redReady++;
+                } else if (p.team === 'blue') {
+                    blueCount++;
+                    if (p.ready) blueReady++;
+                }
+            }
+
+            // 로비 UI 업데이트
+            updateLobbyUI(serverPlayers, redCount, blueCount);
+
+            // 팀 사이즈 결정 (플레이어들이 설정한 값 중 최대값)
+            let maxTeamSize = 1;
+            let maxAiLevel = 1;
+            for (const [id, p] of Object.entries(serverPlayers)) {
+                const playerTeamSize = parseInt(p.team_size) || 3;
+                const playerAiLevel = parseInt(p.ai_level) || 1;
+                if (playerTeamSize > maxTeamSize) {
+                    maxTeamSize = playerTeamSize;
+                }
+                if (playerAiLevel > maxAiLevel) {
+                    maxAiLevel = playerAiLevel;
+                }
+            }
+            teamSize = maxTeamSize;
+            aiLevel = maxAiLevel;
+
+            // 시작 버튼 활성화 조건 (1명 이상이면 시작 가능)
+            const totalPlayers = redCount + blueCount;
+            const allReady = (redReady + blueReady) === totalPlayers && totalPlayers >= 1;
+            startGameBtn.disabled = !allReady;
+
+            if (totalPlayers < 1) {
+                startGameBtn.textContent = `게임 시작 (최소 1명 필요)`;
+            } else if (!allReady) {
+                startGameBtn.textContent = `게임 시작 (준비 대기: ${redReady + blueReady}/${totalPlayers})`;
+            } else {
+                startGameBtn.textContent = `게임 시작! (${teamSize} vs ${teamSize})`;
+            }
+        }
+
+        function updateLobbyUI(serverPlayers, redCount, blueCount) {
+            // 레드팀 슬롯
+            let redHTML = '';
+            let blueHTML = '';
+
+            for (const [id, p] of Object.entries(serverPlayers)) {
+                const slot = `
+                    <div class="player-slot">
+                        <span>${p.name}</span>
+                        <span class="ready-badge ${p.ready ? '' : 'not-ready'}">
+                            ${p.ready ? 'READY' : '대기'}
+                        </span>
+                    </div>
+                `;
+                if (p.team === 'red') redHTML += slot;
+                else if (p.team === 'blue') blueHTML += slot;
+            }
+
+            // 빈 슬롯 추가
+            for (let i = redCount; i < 5; i++) {
+                redHTML += '<div class="player-slot empty">빈 슬롯</div>';
+            }
+            for (let i = blueCount; i < 5; i++) {
+                blueHTML += '<div class="player-slot empty">빈 슬롯</div>';
+            }
+
+            redTeamSlots.innerHTML = redHTML;
+            blueTeamSlots.innerHTML = blueHTML;
+        }
+
+        // 게임 시작
+        function startGame(serverPlayers) {
+            gameActive = true;
+            lobby.style.display = 'none';
+            gameUI.style.display = 'block';
+
+            generateTerrain();
+            initBackground();
+            generateObstacles();
+
+            // 팀 사이즈 결정 (플레이어들이 설정한 값 중 최대값)
+            let maxSize = 1;
+            for (const [id, p] of Object.entries(serverPlayers)) {
+                const playerTeamSize = parseInt(p.team_size) || 3;
+                if (playerTeamSize > maxSize) {
+                    maxSize = playerTeamSize;
+                }
+            }
+            teamSize = maxSize;
+
+            // 실제 플레이어 탱크 생성
+            let redIndex = 0, blueIndex = 0;
+            let redPlayerCount = 0, bluePlayerCount = 0;
+
+            for (const [id, p] of Object.entries(serverPlayers)) {
+                const index = p.team === 'red' ? redIndex++ : blueIndex++;
+                players[id] = {
+                    ...p,
+                    tank: createTank(id, p.team, p.name, index)
+                };
+                if (p.team === 'red') redPlayerCount++;
+                else if (p.team === 'blue') bluePlayerCount++;
+            }
+
+            // AI 탱크 생성 (부족한 인원 채우기)
+            aiTanks = [];
+
+            // RED 팀 AI
+            for (let i = redPlayerCount; i < teamSize; i++) {
+                const aiId = 'ai_red_' + i;
+                const aiTank = createTank(aiId, 'red', 'AI-R' + (i + 1), i);
+                aiTank.isAI = true;
+                aiTank.aiTarget = null;
+                aiTank.aiFireTimer = Math.random() * 3000 + 2000; // 2-5초 랜덤 대기
+                aiTanks.push(aiTank);
+            }
+
+            // BLUE 팀 AI
+            for (let i = bluePlayerCount; i < teamSize; i++) {
+                const aiId = 'ai_blue_' + i;
+                const aiTank = createTank(aiId, 'blue', 'AI-B' + (i + 1), i);
+                aiTank.isAI = true;
+                aiTank.aiTarget = null;
+                aiTank.aiFireTimer = Math.random() * 3000 + 2000;
+                aiTanks.push(aiTank);
+            }
+
+            changeWind();
+            showMessage('BATTLE START!');
+            playGameStartSound();
+            updateGamePlayerList();
+        }
+
+        // 게임 중 플레이어 목록 업데이트
+        function updateGamePlayerList() {
+            let html = '';
+            let redLivesTotal = 0, blueLivesTotal = 0;
+
+            // 실제 플레이어
+            for (const [id, p] of Object.entries(players)) {
+                if (!p.tank) continue;
+
+                const eliminated = p.tank.eliminated;
+                if (p.team === 'red') redLivesTotal += p.tank.lives;
+                else blueLivesTotal += p.tank.lives;
+
+                html += `
+                    <div class="player-item ${eliminated ? 'eliminated' : ''}">
+                        <span class="dot ${p.team}"></span>
+                        <span>${p.name}</span>
+                        <span class="lives-indicator">${eliminated ? 'X' : '♥'.repeat(p.tank.lives)}</span>
+                    </div>
+                `;
+            }
+
+            // AI 탱크
+            for (const ai of aiTanks) {
+                const eliminated = ai.eliminated;
+                if (ai.team === 'red') redLivesTotal += ai.lives;
+                else blueLivesTotal += ai.lives;
+
+                html += `
+                    <div class="player-item ${eliminated ? 'eliminated' : ''}">
+                        <span class="dot ${ai.team}"></span>
+                        <span>${ai.name} 🤖</span>
+                        <span class="lives-indicator">${eliminated ? 'X' : '♥'.repeat(ai.lives)}</span>
+                    </div>
+                `;
+            }
+
+            playerListContent.innerHTML = html;
+            redLives.textContent = `Lives: ${redLivesTotal}`;
+            blueLives.textContent = `Lives: ${blueLivesTotal}`;
+
+            // 승패 체크
+            if (gameActive) {
+                if (redLivesTotal === 0) endGame('blue');
+                else if (blueLivesTotal === 0) endGame('red');
+            }
+        }
+
+        // 발사 처리
+        function handleFire(playerId, angle, power) {
+            const player = players[playerId];
+            if (!player?.tank || player.tank.eliminated) return;
+
+            const tank = player.tank;
+            const now = Date.now();
+
+            // 쿨다운 체크
+            if (tank.cooldown > now) return;
+            tank.cooldown = now + FIRE_COOLDOWN;
+
+            // 지형 기울기를 반영한 실제 발사 각도
+            const terrainAngle = tank.terrainAngle || 0;
+            const cannonRadians = angle * Math.PI / 180;
+            const direction = tank.team === 'red' ? 1 : -1;
+            // 탱크 기울기에 따라 발사 각도 조정
+            const actualRadians = cannonRadians - terrainAngle * direction;
+            const speed = power * 0.3 * SPEED_SCALE;
+
+            // 포구 위치 (기울기 반영)
+            const muzzleX = tank.x + tank.width / 2 + Math.cos(actualRadians * direction) * 50;
+            const muzzleY = tank.y + tank.height / 3 - Math.sin(actualRadians) * 50;
+
+            projectiles.push({
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(actualRadians) * speed * direction,
+                vy: -Math.sin(actualRadians) * speed,
+                radius: 8,
+                owner: playerId,
+                ownerTeam: tank.team,
+                power: power,  // 파워 저장 (크레이터 크기용)
+                trail: []
+            });
+
+            // 머즐 플래시 효과
+            muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                radius: 20,
+                alpha: 1
+            });
+
+            // 발사 연기
+            for (let i = 0; i < 5; i++) {
+                smokeParticles.push({
+                    x: muzzleX + (Math.random() - 0.5) * 20,
+                    y: muzzleY + (Math.random() - 0.5) * 20,
+                    size: 8 + Math.random() * 8,
+                    alpha: 0.6 + Math.random() * 0.3,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: -Math.random() * 2,
+                    type: 'muzzle'
+                });
+            }
+
+            // 발사 사운드
+            playFireSound();
+        }
+
+        // 탱크-장애물 충돌 체크
+        function checkTankObstacleCollision(tankX, tankY, tankWidth, tankHeight) {
+            for (const obs of obstacles) {
+                if (obs.type === 'rock') {
+                    // 바위 충돌 (원형 근사)
+                    const cx = obs.x;
+                    const cy = obs.y - obs.height / 2;
+                    const rx = obs.width / 2 + tankWidth / 2;
+                    const ry = obs.height + tankHeight / 2;
+
+                    const tankCenterX = tankX + tankWidth / 2;
+                    const tankCenterY = tankY + tankHeight / 2;
+
+                    const dx = (tankCenterX - cx) / rx;
+                    const dy = (tankCenterY - cy) / ry;
+
+                    if (dx * dx + dy * dy < 1) {
+                        return true;
+                    }
+                } else {
+                    // 벽 충돌 (사각형)
+                    if (tankX + tankWidth > obs.x &&
+                        tankX < obs.x + obs.width &&
+                        tankY + tankHeight > obs.y &&
+                        tankY < obs.y + obs.height) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // 이동 처리
+        function handleMove(playerId, direction) {
+            const player = players[playerId];
+            if (!player?.tank || player.tank.eliminated) return;
+
+            const tank = player.tank;
+            // 경사에 따른 속도 계산 (오르막 느림, 내리막 빠름)
+            const moveSpeed = getMovementSpeed(tank, direction);
+
+            let newX = tank.x;
+
+            if (direction === 'left') {
+                newX = Math.max(50, tank.x - moveSpeed);
+            } else if (direction === 'right') {
+                newX = Math.min(MAP_WIDTH - 100, tank.x + moveSpeed);
+            }
+
+            // 장애물 충돌 체크
+            const newY = getTerrainY(newX + tank.width / 2) - tank.height;
+            if (!checkTankObstacleCollision(newX, newY, tank.width, tank.height)) {
+                tank.x = newX;
+                // 지형에 맞춤 (위치 + 기울기)
+                updateTankTerrainPosition(tank);
+            }
+        }
+
+        // 바람 변경
+        function changeWind() {
+            wind = (Math.random() - 0.5) * 10;
+            const dir = wind > 0 ? '→' : '←';
+            windVal.textContent = `${dir} ${Math.abs(wind).toFixed(1)}`;
+            updateWindSound();
+        }
+
+        // 충돌 체크
+        function checkCollisions() {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const proj = projectiles[i];
+
+                // 지형 충돌
+                const terrainY = getTerrainY(proj.x);
+                if (proj.y > terrainY) {
+                    createExplosion(proj.x, terrainY);
+                    // 지형 파괴 (크레이터 생성) - 파워에 따라 크기 결정
+                    deformTerrain(proj.x, proj.power || 50, 60 * SPEED_SCALE);
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+
+                // 장애물 충돌
+                const obsResult = checkObstacleCollision(proj.x, proj.y);
+                if (obsResult.hit) {
+                    createExplosion(proj.x, proj.y);
+                    // 장애물 데미지 처리
+                    damageObstacle(obsResult.index);
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+
+                // 화면 밖
+                if (proj.x < 0 || proj.x > MAP_WIDTH || proj.y < -500) {
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+
+                // 탱크 충돌 (실제 플레이어)
+                let hit = false;
+                for (const [id, p] of Object.entries(players)) {
+                    if (!p.tank || p.tank.eliminated) continue;
+                    if (id === proj.owner) continue;
+                    if (p.tank.team === proj.ownerTeam) continue;
+
+                    const tank = p.tank;
+                    if (proj.x > tank.x && proj.x < tank.x + tank.width &&
+                        proj.y > tank.y && proj.y < tank.y + tank.height) {
+
+                        createExplosion(proj.x, proj.y);
+                        projectiles.splice(i, 1);
+
+                        tank.lives--;
+                        tank.damaged = true;
+                        tank.damageTimer = 30;  // 30프레임 동안 피격 효과
+
+                        if (tank.lives <= 0) {
+                            tank.eliminated = true;
+                            createTankDebris(tank.x + tank.width/2, tank.y + tank.height/2, tank.color);
+                            showMessage(`${tank.name} 탈락!`);
+                        }
+
+                        updateGamePlayerList();
+                        playHitSound();
+                        hit = true;
+                        break;
+                    }
+                }
+
+                // AI 탱크 충돌
+                if (!hit) {
+                    for (const ai of aiTanks) {
+                        if (ai.eliminated) continue;
+                        if (ai.id === proj.owner) continue;
+                        if (ai.team === proj.ownerTeam) continue;
+
+                        if (proj.x > ai.x && proj.x < ai.x + ai.width &&
+                            proj.y > ai.y && proj.y < ai.y + ai.height) {
+
+                            createExplosion(proj.x, proj.y);
+                            projectiles.splice(i, 1);
+
+                            ai.lives--;
+                            ai.damaged = true;
+                            ai.damageTimer = 30;
+
+                            if (ai.lives <= 0) {
+                                ai.eliminated = true;
+                                createTankDebris(ai.x + ai.width/2, ai.y + ai.height/2, ai.color);
+                                showMessage(`${ai.name} 탈락!`);
+                            }
+
+                            updateGamePlayerList();
+                            playHitSound();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 폭발 생성
+        function createExplosion(x, y) {
+            explosions.push({
+                x, y,
+                radius: 5,
+                maxRadius: 50,
+                alpha: 1
+            });
+            playExplosionSound();
+        }
+
+        // 게임 종료
+        function endGame(winningTeam) {
+            gameActive = false;
+
+            // 솔로 플레이 체크 (실제 플레이어 1명)
+            const humanPlayerCount = Object.keys(players).length;
+            const isSoloPlay = humanPlayerCount === 1;
+
+            // 솔로 플레이어의 팀 확인
+            let playerTeam = null;
+            for (const [id, p] of Object.entries(players)) {
+                playerTeam = p.team;
+                break;
+            }
+
+            // 솔로 플레이 + 승리 시 다음 레벨로
+            if (isSoloPlay && winningTeam === playerTeam) {
+                // 레벨업 (최대 10)
+                if (aiLevel < 10) {
+                    aiLevel++;
+                    showMessage(`레벨 ${aiLevel} 시작!`);
+
+                    // 잠시 후 자동으로 다음 게임 시작
+                    setTimeout(() => {
+                        startNextLevel();
+                    }, 2000);
+
+                    playVictorySound();
+                    return;
+                } else {
+                    // 레벨 10 클리어 - 축하 메시지
+                    winnerTitle.textContent = '🏆 ALL CLEAR! 🏆';
+                    winnerTitle.className = winningTeam;
+                    gameStats.textContent = '최고 난이도 클리어!';
+                    gameOverScreen.style.display = 'flex';
+                    playVictorySound();
+                    return;
+                }
+            }
+
+            // 솔로 플레이 + 패배 시
+            if (isSoloPlay && winningTeam !== playerTeam) {
+                winnerTitle.textContent = `GAME OVER`;
+                winnerTitle.className = 'red';
+                gameStats.textContent = `레벨 ${aiLevel}에서 패배`;
+                gameOverScreen.style.display = 'flex';
+                playDefeatSound();
+                return;
+            }
+
+            // 멀티플레이 - 기존 방식
+            winnerTitle.textContent = `${winningTeam.toUpperCase()} TEAM WIN!`;
+            winnerTitle.className = winningTeam;
+            gameStats.textContent = '';
+            gameOverScreen.style.display = 'flex';
+            playVictorySound();
+        }
+
+        // 다음 레벨 시작 (솔로 플레이)
+        function startNextLevel() {
+            gameOverScreen.style.display = 'none';
+
+            // 게임 상태 리셋 (플레이어 유지)
+            projectiles = [];
+            explosions = [];
+            aiTanks = [];
+            tankDebris = [];
+            smokeParticles = [];
+            muzzleFlashes = [];
+            craters = [];
+
+            // 새 지형 생성
+            generateTerrain();
+            generateObstacles();
+
+            // 플레이어 탱크 재생성
+            for (const [id, p] of Object.entries(players)) {
+                const index = p.team === 'red' ? 0 : 0;
+                p.tank = createTank(id, p.team, p.name, index);
+            }
+
+            // AI 탱크 재생성
+            const playerTeam = Object.values(players)[0]?.team || 'red';
+            const enemyTeam = playerTeam === 'red' ? 'blue' : 'red';
+
+            // 아군 AI
+            for (let i = 1; i < teamSize; i++) {
+                const aiId = `ai_${playerTeam}_${i}`;
+                const aiTank = createTank(aiId, playerTeam, `AI-${playerTeam[0].toUpperCase()}${i}`, i);
+                aiTank.isAI = true;
+                aiTank.aiFireTimer = Math.random() * 3000 + 2000;
+                aiTanks.push(aiTank);
+            }
+
+            // 적 AI
+            for (let i = 0; i < teamSize; i++) {
+                const aiId = `ai_${enemyTeam}_${i}`;
+                const aiTank = createTank(aiId, enemyTeam, `AI-${enemyTeam[0].toUpperCase()}${i + 1}`, i);
+                aiTank.isAI = true;
+                aiTank.aiFireTimer = Math.random() * 3000 + 2000;
+                aiTanks.push(aiTank);
+            }
+
+            changeWind();
+            gameActive = true;
+            showMessage(`LEVEL ${aiLevel} START!`);
+            playGameStartSound();
+        }
+
+        // 로비로 리셋
+        function resetToLobby() {
+            gameActive = false;
+            gameOverScreen.style.display = 'none';
+            gameUI.style.display = 'none';
+            lobby.style.display = 'flex';
+
+            projectiles = [];
+            explosions = [];
+            aiTanks = [];
+            tankDebris = [];
+            smokeParticles = [];
+            muzzleFlashes = [];
+            craters = [];
+            teamSize = 3;
+
+            // 탱크 제거, 플레이어 정보는 유지
+            for (const id in players) {
+                delete players[id].tank;
+            }
+        }
+
+        // 메시지 표시
+        function showMessage(text) {
+            messageDiv.textContent = text;
+            messageDiv.classList.add('show');
+            setTimeout(() => messageDiv.classList.remove('show'), 2000);
+        }
+
+        // AI 탱크 업데이트
+        // AI 난이도 파라미터 계산
+        function getAiDifficultyParams() {
+            // 레벨 1-10, 6부터 어려움
+            // 레벨이 높을수록 정밀도 증가 (오차 감소)
+            const level = aiLevel;
+
+            // 각도 오차: 레벨1=±20°, 레벨10=±0.5° (거의 정확)
+            const angleError = 20 - (level - 1) * 2.17;  // 20 → 0.5
+
+            // 파워 오차: 레벨1=±25, 레벨10=±1 (거의 정확)
+            const powerError = 25 - (level - 1) * 2.67;  // 25 → 1
+
+            // 장애물 공격 확률: 레벨1=20%, 레벨10=70%
+            const obstacleAttackChance = 0.2 + (level - 1) * 0.056;  // 0.2 ~ 0.7
+
+            // 발사 간격: 레벨1=3~5초, 레벨10=1~2초 (고레벨은 빠른 연사)
+            const fireDelayMin = 3000 - (level - 1) * 222;  // 3000 → 1000
+            const fireDelayMax = 5000 - (level - 1) * 333;  // 5000 → 2000
+
+            return {
+                angleError: Math.max(0.5, angleError),
+                powerError: Math.max(1, powerError),
+                obstacleAttackChance: Math.min(0.7, obstacleAttackChance),
+                fireDelayMin: Math.max(1000, fireDelayMin),
+                fireDelayMax: Math.max(2000, fireDelayMax)
+            };
+        }
+
+        // AI 정밀 조준 계산 (탄도학 기반)
+        function calculatePerfectAim(ai, targetX, targetY) {
+            const direction = ai.team === 'red' ? 1 : -1;
+            const startX = ai.x + ai.width / 2;
+            const startY = ai.y + ai.height / 3;
+
+            const dx = (targetX - startX) * direction;  // 항상 양수로 변환
+            const dy = startY - targetY;  // 위로 갈수록 양수
+
+            // 탄도학 계산을 위한 시뮬레이션
+            // 여러 각도와 파워 조합을 테스트하여 최적값 찾기
+            let bestAngle = 45;
+            let bestPower = 50;
+            let bestDistance = Infinity;
+
+            // 바람 영향 고려
+            const windEffect = wind * 0.01;
+
+            for (let testAngle = 25; testAngle <= 75; testAngle += 2) {
+                for (let testPower = 30; testPower <= 100; testPower += 5) {
+                    // 시뮬레이션
+                    const terrainAngle = ai.terrainAngle || 0;
+                    const cannonRadians = testAngle * Math.PI / 180;
+                    const actualRadians = cannonRadians - terrainAngle * direction;
+                    const speed = testPower * 0.3 * SPEED_SCALE;
+
+                    let simX = 0;
+                    let simY = 0;
+                    let simVx = Math.cos(actualRadians) * speed;
+                    let simVy = -Math.sin(actualRadians) * speed;
+
+                    // 최대 300프레임 시뮬레이션
+                    for (let t = 0; t < 300; t++) {
+                        simVx += windEffect;
+                        simVy += GRAVITY;
+                        simX += simVx;
+                        simY += simVy;
+
+                        // 타겟 높이에 도달했는지 확인
+                        if (simY >= -dy) {
+                            const hitX = simX;
+                            const distToTarget = Math.abs(hitX - dx);
+
+                            if (distToTarget < bestDistance) {
+                                bestDistance = distToTarget;
+                                bestAngle = testAngle;
+                                bestPower = testPower;
+                            }
+                            break;
+                        }
+
+                        // 너무 멀리 갔으면 중단
+                        if (simX > dx + 500 || simY > 500) break;
+                    }
+                }
+            }
+
+            return { angle: bestAngle, power: bestPower };
+        }
+
+        function updateAI(deltaTime) {
+            const diffParams = getAiDifficultyParams();
+
+            for (const ai of aiTanks) {
+                if (ai.eliminated) continue;
+
+                // AI 이동 로직
+                if (!ai.moveTimer) ai.moveTimer = 0;
+                if (!ai.moveDirection) ai.moveDirection = 0;
+                if (!ai.moveDuration) ai.moveDuration = 0;
+
+                ai.moveTimer -= deltaTime;
+
+                // 새로운 이동 결정 (이동 타이머가 끝나면)
+                if (ai.moveTimer <= 0) {
+                    // 30% 확률로 이동, 70% 확률로 정지
+                    if (Math.random() < 0.3) {
+                        ai.moveDirection = Math.random() < 0.5 ? -1 : 1;
+                        ai.moveDuration = 500 + Math.random() * 1500; // 0.5~2초 이동
+                    } else {
+                        ai.moveDirection = 0;
+                        ai.moveDuration = 1000 + Math.random() * 2000; // 1~3초 정지
+                    }
+                    ai.moveTimer = ai.moveDuration;
+                }
+
+                // 이동 실행
+                if (ai.moveDirection !== 0) {
+                    // 경사에 따른 속도 계산 (AI는 기본 속도가 낮음)
+                    const direction = ai.moveDirection > 0 ? 'right' : 'left';
+                    const moveSpeed = getMovementSpeed(ai, direction) * 0.4;  // AI는 40% 속도
+                    const newX = ai.x + ai.moveDirection * moveSpeed;
+
+                    // 맵 경계 체크 (팀별 영역 제한)
+                    const minX = ai.team === 'red' ? 50 : MAP_WIDTH / 2;
+                    const maxX = ai.team === 'red' ? MAP_WIDTH / 2 - 100 : MAP_WIDTH - 100;
+
+                    // 장애물 충돌 체크
+                    const newY = getTerrainY(newX + ai.width / 2) - ai.height;
+                    const blocked = checkTankObstacleCollision(newX, newY, ai.width, ai.height);
+
+                    if (newX >= minX && newX <= maxX && !blocked) {
+                        ai.x = newX;
+                        updateTankTerrainPosition(ai);
+                    } else {
+                        // 경계 또는 장애물에 닿으면 방향 전환
+                        ai.moveDirection *= -1;
+                    }
+                }
+
+                // 쿨다운 감소
+                ai.aiFireTimer -= deltaTime;
+
+                if (ai.aiFireTimer <= 0) {
+                    // 전략적 타겟 결정
+                    let finalTarget = null;
+                    let targetType = 'tank';  // 'tank' or 'obstacle'
+
+                    // 1. 앞에 막고 있는 장애물 찾기
+                    const direction = ai.team === 'red' ? 1 : -1;
+                    let blockingObstacle = null;
+                    let minObstacleDistance = Infinity;
+
+                    for (const obs of obstacles) {
+                        // AI 진행 방향에 있는 장애물만 확인
+                        const obsX = obs.type === 'rock' ? obs.x : obs.x + obs.width / 2;
+                        const dx = (obsX - ai.x) * direction;
+
+                        if (dx > 0 && dx < MAP_WIDTH * 0.3) {  // 진행 방향 30% 범위 내
+                            if (dx < minObstacleDistance) {
+                                minObstacleDistance = dx;
+                                blockingObstacle = obs;
+                            }
+                        }
+                    }
+
+                    // 2. 적 탱크 찾기
+                    const enemies = [];
+                    for (const [id, p] of Object.entries(players)) {
+                        if (p.tank && !p.tank.eliminated && p.tank.team !== ai.team) {
+                            enemies.push(p.tank);
+                        }
+                    }
+                    for (const other of aiTanks) {
+                        if (!other.eliminated && other.team !== ai.team) {
+                            enemies.push(other);
+                        }
+                    }
+
+                    // 3. 전략적 결정 (난이도에 따라 장애물 공격 확률 변동)
+                    // - 막고 있는 장애물이 있고, 가까우면 확률로 장애물 공격
+                    // - 그 외에는 적 탱크 공격
+                    if (blockingObstacle && minObstacleDistance < MAP_WIDTH * 0.15 && Math.random() < diffParams.obstacleAttackChance) {
+                        targetType = 'obstacle';
+                        finalTarget = blockingObstacle;
+                    } else if (enemies.length > 0) {
+                        targetType = 'tank';
+                        finalTarget = enemies[Math.floor(Math.random() * enemies.length)];
+                    } else if (blockingObstacle) {
+                        // 적이 없으면 장애물이라도 공격
+                        targetType = 'obstacle';
+                        finalTarget = blockingObstacle;
+                    }
+
+                    if (finalTarget) {
+                        let targetX, targetY;
+
+                        if (targetType === 'obstacle') {
+                            // 장애물 중심 조준
+                            targetX = finalTarget.type === 'rock' ? finalTarget.x : finalTarget.x + finalTarget.width / 2;
+                            targetY = finalTarget.type === 'rock' ? finalTarget.y - finalTarget.height / 2 : finalTarget.y + finalTarget.height / 2;
+                        } else {
+                            // 탱크 조준
+                            targetX = finalTarget.x + finalTarget.width / 2;
+                            targetY = finalTarget.y + finalTarget.height / 2;
+                        }
+
+                        // 정밀 탄도 계산 사용
+                        const perfectAim = calculatePerfectAim(ai, targetX, targetY);
+
+                        // 난이도에 따른 오차 적용 (레벨 10은 거의 완벽)
+                        const angleError = (Math.random() - 0.5) * diffParams.angleError * 2;
+                        const powerError = (Math.random() - 0.5) * diffParams.powerError * 2;
+
+                        let aimAngle = Math.max(20, Math.min(75, perfectAim.angle + angleError));
+                        let aimPower = Math.max(30, Math.min(100, perfectAim.power + powerError));
+
+                        // AI 발사
+                        fireAI(ai, aimAngle, aimPower);
+                    }
+
+                    // 다음 발사까지 대기 (난이도에 따라 변동)
+                    ai.aiFireTimer = diffParams.fireDelayMin + Math.random() * (diffParams.fireDelayMax - diffParams.fireDelayMin);
+                }
+            }
+        }
+
+        // AI 발사
+        function fireAI(ai, angle, power) {
+            const now = Date.now();
+            if (ai.cooldown > now) return;
+            ai.cooldown = now + FIRE_COOLDOWN;
+
+            ai.angle = angle;
+            ai.power = power;
+
+            // 지형 기울기를 반영한 실제 발사 각도
+            const terrainAngle = ai.terrainAngle || 0;
+            const cannonRadians = angle * Math.PI / 180;
+            const direction = ai.team === 'red' ? 1 : -1;
+            // 탱크 기울기에 따라 발사 각도 조정
+            const actualRadians = cannonRadians - terrainAngle * direction;
+            const speed = power * 0.3 * SPEED_SCALE;
+
+            // 포구 위치 (기울기 반영)
+            const muzzleX = ai.x + ai.width / 2 + Math.cos(actualRadians * direction) * 50;
+            const muzzleY = ai.y + ai.height / 3 - Math.sin(actualRadians) * 50;
+
+            projectiles.push({
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(actualRadians) * speed * direction,
+                vy: -Math.sin(actualRadians) * speed,
+                radius: 8,
+                owner: ai.id,
+                ownerTeam: ai.team,
+                power: power,  // 파워 저장 (크레이터 크기용)
+                trail: []
+            });
+
+            // 머즐 플래시 효과
+            muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                radius: 20,
+                alpha: 1
+            });
+
+            // 발사 연기
+            for (let i = 0; i < 5; i++) {
+                smokeParticles.push({
+                    x: muzzleX + (Math.random() - 0.5) * 20,
+                    y: muzzleY + (Math.random() - 0.5) * 20,
+                    size: 8 + Math.random() * 8,
+                    alpha: 0.6 + Math.random() * 0.3,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: -Math.random() * 2,
+                    type: 'muzzle'
+                });
+            }
+
+            playFireSound();
+        }
+
+        let lastTime = Date.now();
+
+        // 업데이트
+        function update() {
+            if (!gameActive) return;
+
+            const now = Date.now();
+            const deltaTime = now - lastTime;
+            lastTime = now;
+
+            // AI 업데이트
+            updateAI(deltaTime);
+
+            // 바람 파티클 업데이트
+            updateWindParticles();
+
+            // 포탄 업데이트
+            for (const proj of projectiles) {
+                proj.vx += wind * 0.01;
+                proj.vy += GRAVITY;
+                proj.vx *= AIR_RESISTANCE;
+                proj.vy *= AIR_RESISTANCE;
+                proj.x += proj.vx;
+                proj.y += proj.vy;
+
+                proj.trail.push({ x: proj.x, y: proj.y, alpha: 0.5 });
+                if (proj.trail.length > 15) proj.trail.shift();
+            }
+
+            checkCollisions();
+
+            // 폭발 업데이트
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const exp = explosions[i];
+                exp.radius += 3;
+                exp.alpha -= 0.05;
+                if (exp.alpha <= 0) explosions.splice(i, 1);
+            }
+
+            // 머즐 플래시 업데이트
+            for (let i = muzzleFlashes.length - 1; i >= 0; i--) {
+                const flash = muzzleFlashes[i];
+                flash.alpha -= 0.15;
+                flash.radius += 5;
+                if (flash.alpha <= 0) muzzleFlashes.splice(i, 1);
+            }
+
+            // 연기 파티클 업데이트
+            for (let i = smokeParticles.length - 1; i >= 0; i--) {
+                const s = smokeParticles[i];
+                s.x += s.vx + wind * 0.1;
+                s.y += s.vy;
+                s.vy -= 0.02;  // 위로 상승
+                s.alpha -= 0.015;
+                s.size += 0.3;
+                if (s.alpha <= 0) smokeParticles.splice(i, 1);
+            }
+
+            // 탱크 파편 업데이트
+            for (let i = tankDebris.length - 1; i >= 0; i--) {
+                const d = tankDebris[i];
+                d.vy += 0.5;  // 중력
+                d.x += d.vx;
+                d.y += d.vy;
+                d.rotation += d.rotationSpeed;
+                d.alpha -= 0.02;
+
+                // 지형에 닿으면 멈춤
+                const terrainY = getTerrainY(d.x);
+                if (d.y > terrainY) {
+                    d.y = terrainY;
+                    d.vy = 0;
+                    d.vx *= 0.5;
+                }
+
+                if (d.alpha <= 0) {
+                    tankDebris.splice(i, 1);
+                }
+            }
+
+            // 탱크 피격 타이머 업데이트
+            for (const [id, p] of Object.entries(players)) {
+                if (p.tank && p.tank.damaged) {
+                    p.tank.damageTimer--;
+                    if (p.tank.damageTimer <= 0) {
+                        p.tank.damaged = false;
+                    }
+                }
+            }
+            for (const ai of aiTanks) {
+                if (ai.damaged) {
+                    ai.damageTimer--;
+                    if (ai.damageTimer <= 0) {
+                        ai.damaged = false;
+                    }
+                }
+            }
+        }
+
+        // 카메라 (맵 중앙 고정 또는 줌아웃으로 전체 보기)
+        let cameraX = 0;
+        let zoom = 1;
+
+        function updateCamera() {
+            // 맵 전체가 보이도록 줌 계산
+            zoom = Math.min(canvas.width / MAP_WIDTH, 1);
+            cameraX = (MAP_WIDTH * zoom - canvas.width) / 2;
+        }
+
+        // 그리기
+        function draw() {
+            // 배경 그라데이션
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#4A90C2');
+            gradient.addColorStop(0.3, '#87CEEB');
+            gradient.addColorStop(0.6, '#B0E0E6');
+            gradient.addColorStop(1, '#E0F4FF');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 태양
+            drawSun();
+
+            ctx.save();
+            ctx.scale(zoom, zoom);
+            ctx.translate(-cameraX / zoom, 0);
+
+            // 구름
+            for (const cloud of clouds) {
+                drawCloud(cloud);
+                cloud.x += cloud.speed + wind * 0.1;
+                if (cloud.x > MAP_WIDTH + 100) cloud.x = -100;
+                if (cloud.x < -100) cloud.x = MAP_WIDTH + 100;
+            }
+
+            // 먼 산
+            for (const m of mountains.filter(m => m.layer === 0)) {
+                drawMountain(m);
+            }
+
+            // 가까운 산
+            for (const m of mountains.filter(m => m.layer === 1)) {
+                drawMountain(m);
+            }
+
+            // 나무들
+            for (const tree of trees) {
+                const treeY = getTerrainY(tree.x);
+                drawTree(tree, treeY);
+            }
+
+            // 바람 파티클
+            for (const p of windParticles) {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+
+                if (p.type === 'leaf') {
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rotation || 0);
+                    ctx.fillStyle = '#90EE90';
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, p.size * 2, p.size, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            // 바람 줄무늬 효과
+            if (Math.abs(wind) > 3) {
+                const intensity = Math.min(1, (Math.abs(wind) - 3) / 5);
+                ctx.strokeStyle = `rgba(255, 255, 255, ${intensity * 0.15})`;
+                ctx.lineWidth = 1;
+
+                const dir = wind > 0 ? 1 : -1;
+                const lineCount = Math.floor(intensity * 20);
+
+                for (let i = 0; i < lineCount; i++) {
+                    const y = Math.random() * canvas.height * 0.7;
+                    const x = Math.random() * MAP_WIDTH;
+                    const length = 30 + Math.random() * 50;
+
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + length * dir, y + (Math.random() - 0.5) * 10);
+                    ctx.stroke();
+                }
+            }
+
+            // 지형 (색상 적용)
+            if (terrainPoints.length > 0) {
+                const colors = terrainColors[currentTerrainType] || terrainColors['hills'];
+                const terrainGradient = ctx.createLinearGradient(0, canvas.height - 200, 0, canvas.height);
+                terrainGradient.addColorStop(0, colors[0]);
+                terrainGradient.addColorStop(0.3, colors[1]);
+                terrainGradient.addColorStop(0.7, colors[2]);
+                terrainGradient.addColorStop(1, colors[3]);
+
+                ctx.fillStyle = terrainGradient;
+                ctx.beginPath();
+                ctx.moveTo(0, canvas.height / zoom);
+                for (const point of terrainPoints) {
+                    ctx.lineTo(point.x, point.y);
+                }
+                ctx.lineTo(MAP_WIDTH, canvas.height / zoom);
+                ctx.closePath();
+                ctx.fill();
+
+                // 지형 하이라이트 (위쪽 밝은 선)
+                ctx.strokeStyle = terrainHighlightColors[currentTerrainType] || '#81C784';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(terrainPoints[0].x, terrainPoints[0].y);
+                for (let i = 1; i < terrainPoints.length; i++) {
+                    ctx.lineTo(terrainPoints[i].x, terrainPoints[i].y);
+                }
+                ctx.stroke();
+
+                // 지형 디테일 (풀/바위/모래)
+                const detailColor = terrainDetailColors[currentTerrainType] || '#1e7b1e';
+                ctx.fillStyle = detailColor;
+
+                if (currentTerrainType === 'dunes') {
+                    // 모래 알갱이
+                    for (let i = 0; i < terrainPoints.length - 1; i += 4) {
+                        const p = terrainPoints[i];
+                        ctx.beginPath();
+                        ctx.arc(p.x + Math.random() * 10, p.y - 2, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                } else if (currentTerrainType === 'mountain' || currentTerrainType === 'cliffs') {
+                    // 바위 조각
+                    for (let i = 0; i < terrainPoints.length - 1; i += 10) {
+                        const p = terrainPoints[i];
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p.x + 5, p.y - 6);
+                        ctx.lineTo(p.x + 10, p.y);
+                        ctx.fill();
+                    }
+                } else {
+                    // 풀
+                    for (let i = 0; i < terrainPoints.length - 1; i += 6) {
+                        const p = terrainPoints[i];
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p.x + 4, p.y - 8);
+                        ctx.lineTo(p.x + 8, p.y);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // 장애물 그리기
+            for (const obs of obstacles) {
+                // 데미지 상태에 따라 투명도 조절
+                const damageRatio = obs.hp / obs.maxHp;
+                const alpha = 0.5 + damageRatio * 0.5;
+
+                if (obs.type === 'rock') {
+                    // 바위 (타원형)
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
+                    const rockGrad = ctx.createRadialGradient(obs.x, obs.y - obs.height * 0.3, 0, obs.x, obs.y, obs.width * 0.6);
+                    rockGrad.addColorStop(0, '#8B8B8B');
+                    rockGrad.addColorStop(0.5, '#696969');
+                    rockGrad.addColorStop(1, '#4A4A4A');
+                    ctx.fillStyle = rockGrad;
+                    ctx.beginPath();
+                    ctx.ellipse(obs.x, obs.y, obs.width / 2, obs.height, 0, Math.PI, 0);
+                    ctx.fill();
+
+                    // 바위 테두리
+                    ctx.strokeStyle = '#3A3A3A';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    // 바위 하이라이트
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                    ctx.beginPath();
+                    ctx.ellipse(obs.x - obs.width * 0.15, obs.y - obs.height * 0.5, obs.width * 0.2, obs.height * 0.3, -0.3, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 데미지 금 표시
+                    if (obs.hp < obs.maxHp) {
+                        ctx.strokeStyle = '#222';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(obs.x - obs.width * 0.2, obs.y - obs.height * 0.3);
+                        ctx.lineTo(obs.x + obs.width * 0.1, obs.y - obs.height * 0.6);
+                        ctx.lineTo(obs.x - obs.width * 0.1, obs.y - obs.height * 0.2);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                } else {
+                    // 벽 (사각형)
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
+                    const wallGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.width, obs.y);
+                    wallGrad.addColorStop(0, '#A0522D');
+                    wallGrad.addColorStop(0.5, '#8B4513');
+                    wallGrad.addColorStop(1, '#654321');
+                    ctx.fillStyle = wallGrad;
+                    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+
+                    // 벽 테두리
+                    ctx.strokeStyle = '#3E2723';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+
+                    // 벽돌 패턴
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.lineWidth = 1;
+                    const brickHeight = 15;
+                    for (let by = obs.y; by < obs.y + obs.height; by += brickHeight) {
+                        ctx.beginPath();
+                        ctx.moveTo(obs.x, by);
+                        ctx.lineTo(obs.x + obs.width, by);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+            }
+
+            // 탱크들 (실제 플레이어)
+            for (const [id, p] of Object.entries(players)) {
+                if (!p.tank || p.tank.eliminated) continue;
+                drawTank(p.tank);
+            }
+
+            // AI 탱크들
+            for (const ai of aiTanks) {
+                if (!ai.eliminated) {
+                    drawTank(ai);
+                }
+            }
+
+            // 포탄들
+            for (const proj of projectiles) {
+                // 꼬리
+                for (const t of proj.trail) {
+                    ctx.save();
+                    ctx.globalAlpha = t.alpha * 0.3;
+                    ctx.fillStyle = '#666';
+                    ctx.beginPath();
+                    ctx.arc(t.x, t.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                // 포탄
+                ctx.fillStyle = '#333';
+                ctx.beginPath();
+                ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 폭발
+            for (const exp of explosions) {
+                const grad = ctx.createRadialGradient(exp.x, exp.y, 0, exp.x, exp.y, exp.radius);
+                grad.addColorStop(0, `rgba(255, 200, 50, ${exp.alpha})`);
+                grad.addColorStop(0.5, `rgba(255, 100, 0, ${exp.alpha * 0.5})`);
+                grad.addColorStop(1, `rgba(100, 20, 0, 0)`);
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 머즐 플래시
+            for (const flash of muzzleFlashes) {
+                ctx.save();
+                ctx.globalAlpha = flash.alpha;
+
+                // 외부 광채
+                const flashGrad = ctx.createRadialGradient(flash.x, flash.y, 0, flash.x, flash.y, flash.radius);
+                flashGrad.addColorStop(0, 'rgba(255, 255, 200, 1)');
+                flashGrad.addColorStop(0.3, 'rgba(255, 200, 50, 0.8)');
+                flashGrad.addColorStop(0.6, 'rgba(255, 100, 0, 0.4)');
+                flashGrad.addColorStop(1, 'rgba(255, 50, 0, 0)');
+                ctx.fillStyle = flashGrad;
+                ctx.beginPath();
+                ctx.arc(flash.x, flash.y, flash.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 중심 밝은 부분
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.beginPath();
+                ctx.arc(flash.x, flash.y, flash.radius * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            // 연기 파티클
+            for (const smoke of smokeParticles) {
+                ctx.save();
+                ctx.globalAlpha = smoke.alpha;
+
+                const smokeGrad = ctx.createRadialGradient(smoke.x, smoke.y, 0, smoke.x, smoke.y, smoke.size);
+                if (smoke.type === 'muzzle') {
+                    // 발사 연기 (밝은 회색)
+                    smokeGrad.addColorStop(0, 'rgba(200, 200, 200, 0.8)');
+                    smokeGrad.addColorStop(0.5, 'rgba(150, 150, 150, 0.5)');
+                    smokeGrad.addColorStop(1, 'rgba(100, 100, 100, 0)');
+                } else {
+                    // 일반 연기 (어두운 회색)
+                    smokeGrad.addColorStop(0, 'rgba(80, 80, 80, 0.6)');
+                    smokeGrad.addColorStop(0.5, 'rgba(60, 60, 60, 0.3)');
+                    smokeGrad.addColorStop(1, 'rgba(40, 40, 40, 0)');
+                }
+                ctx.fillStyle = smokeGrad;
+                ctx.beginPath();
+                ctx.arc(smoke.x, smoke.y, smoke.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            // 탱크 파편 그리기
+            for (const d of tankDebris) {
+                ctx.save();
+                ctx.translate(d.x, d.y);
+                ctx.rotate(d.rotation);
+                ctx.globalAlpha = d.alpha;
+                ctx.fillStyle = d.color;
+                ctx.fillRect(-d.size / 2, -d.size / 2, d.size, d.size);
+                ctx.restore();
+            }
+
+            // 예상 궤적 그리기 (각 탱크별)
+            for (const [id, p] of Object.entries(players)) {
+                if (!p.tank || p.tank.eliminated) continue;
+                drawTrajectory(p.tank);
+            }
+            for (const ai of aiTanks) {
+                if (!ai.eliminated) {
+                    drawTrajectory(ai);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // 예상 궤적 그리기 함수
+        function drawTrajectory(tank) {
+            // 지형 기울기를 반영한 실제 발사 각도
+            const terrainAngle = tank.terrainAngle || 0;
+            const cannonRadians = tank.angle * Math.PI / 180;
+            const direction = tank.team === 'red' ? 1 : -1;
+            const actualRadians = cannonRadians - terrainAngle * direction;
+            const speed = tank.power * 0.3 * SPEED_SCALE;
+
+            let vx = Math.cos(actualRadians) * speed * direction;
+            let vy = -Math.sin(actualRadians) * speed;
+            let x = tank.x + tank.width / 2 + Math.cos(actualRadians * direction) * 50;
+            let y = tank.y + tank.height / 3 - Math.sin(actualRadians) * 50;
+
+            // 궤적 포인트 계산
+            const trajectoryPoints = [{x, y}];
+
+            for (let i = 0; i < 150; i++) {
+                vx += wind * 0.01;
+                vy += GRAVITY;
+                vx *= AIR_RESISTANCE;
+                vy *= AIR_RESISTANCE;
+                x += vx;
+                y += vy;
+
+                // 지형 충돌
+                const terrainY = getTerrainY(x);
+                if (y > terrainY) {
+                    trajectoryPoints.push({x, y: terrainY});
+                    break;
+                }
+
+                // 장애물 충돌
+                if (checkObstacleCollision(x, y).hit) {
+                    trajectoryPoints.push({x, y});
+                    break;
+                }
+
+                // 화면 밖
+                if (x < 0 || x > MAP_WIDTH || y < -500) {
+                    break;
+                }
+
+                trajectoryPoints.push({x, y});
+            }
+
+            // 100% 표시 (전체 궤적)
+            const visibleRatio = 1.0;
+            const visibleCount = Math.floor(trajectoryPoints.length * visibleRatio);
+
+            if (visibleCount < 2) return;
+
+            // 팀 색상으로 궤적 표시
+            const baseColor = tank.team === 'red' ? '255, 100, 100' : '100, 150, 255';
+
+            ctx.strokeStyle = `rgba(${baseColor}, 0.5)`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 8]);
+            ctx.beginPath();
+            ctx.moveTo(trajectoryPoints[0].x, trajectoryPoints[0].y);
+
+            for (let i = 1; i < visibleCount; i++) {
+                // 끝에 가까워질수록 페이드아웃
+                const fadeStart = visibleCount * 0.6;
+                if (i > fadeStart) {
+                    const alpha = 0.5 * (1 - (i - fadeStart) / (visibleCount - fadeStart));
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(trajectoryPoints[i-1].x, trajectoryPoints[i-1].y);
+                    ctx.strokeStyle = `rgba(${baseColor}, ${alpha})`;
+                }
+                ctx.lineTo(trajectoryPoints[i].x, trajectoryPoints[i].y);
+            }
+
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 궤적 끝 부분에 "?" 표시
+            if (visibleCount > 0 && visibleCount < trajectoryPoints.length) {
+                const lastVisible = trajectoryPoints[visibleCount - 1];
+                ctx.fillStyle = `rgba(${baseColor}, 0.7)`;
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('?', lastVisible.x, lastVisible.y - 10);
+            }
+        }
+
+        function drawTank(tank) {
+            const centerX = tank.x + tank.width / 2;
+            const centerY = tank.y + tank.height / 2;
+            const w = tank.width;
+            const h = tank.height;
+
+            // 내 탱크인지 확인
+            const isMyTank = myPlayerName && tank.name === myPlayerName;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 지형 기울기에 따라 탱크 회전
+            ctx.rotate(tank.terrainAngle || 0);
+
+            ctx.translate(-w / 2, -h / 2);
+
+            // 피격 효과 (깜빡임)
+            if (tank.damaged) {
+                ctx.globalAlpha = 0.5 + Math.random() * 0.5;
+            }
+
+            // 그림자
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.beginPath();
+            ctx.ellipse(w / 2, h + 5, w / 2, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 캐터필러 트랙
+            ctx.fillStyle = '#2C2C2C';
+            ctx.beginPath();
+            ctx.roundRect(-5, h - 15, w + 10, 20, 8);
+            ctx.fill();
+
+            // 트랙 디테일
+            ctx.fillStyle = '#1a1a1a';
+            for (let i = 0; i < 6; i++) {
+                ctx.fillRect(i * 12, h - 12, 8, 14);
+            }
+
+            // 바퀴들
+            ctx.fillStyle = '#444';
+            for (let i = 0; i < 4; i++) {
+                ctx.beginPath();
+                ctx.arc(10 + i * 15, h - 5, 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#666';
+                ctx.beginPath();
+                ctx.arc(10 + i * 15, h - 5, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#444';
+            }
+
+            // 탱크 몸체 (그라데이션)
+            const baseColor = tank.color;
+            const bodyGrad = ctx.createLinearGradient(0, 0, 0, h);
+            bodyGrad.addColorStop(0, lightenColor(baseColor, 30));
+            bodyGrad.addColorStop(0.5, baseColor);
+            bodyGrad.addColorStop(1, darkenColor(baseColor, 30));
+            ctx.fillStyle = bodyGrad;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, w, h - 10, 5);
+            ctx.fill();
+
+            // 몸체 테두리
+            ctx.strokeStyle = darkenColor(baseColor, 50);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 포탑 (둥근 모양)
+            const turretX = w / 2;
+            const turretY = h / 3;
+            const turretGrad = ctx.createRadialGradient(turretX - 5, turretY - 5, 0, turretX, turretY, 20);
+            turretGrad.addColorStop(0, lightenColor(baseColor, 40));
+            turretGrad.addColorStop(1, darkenColor(baseColor, 20));
+            ctx.fillStyle = turretGrad;
+            ctx.beginPath();
+            ctx.arc(turretX, turretY, 18, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = darkenColor(baseColor, 50);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 포신
+            ctx.save();
+            if (tank.team === 'red') {
+                ctx.translate(turretX + 10, turretY);
+                ctx.rotate(-tank.angle * Math.PI / 180);
+            } else {
+                ctx.translate(turretX - 10, turretY);
+                ctx.rotate((-180 + tank.angle) * Math.PI / 180);
+            }
+
+            const barrelGrad = ctx.createLinearGradient(0, -6, 0, 6);
+            barrelGrad.addColorStop(0, '#555');
+            barrelGrad.addColorStop(0.5, '#333');
+            barrelGrad.addColorStop(1, '#222');
+            ctx.fillStyle = barrelGrad;
+            ctx.beginPath();
+            ctx.roundRect(0, -6, 45, 12, 2);
+            ctx.fill();
+
+            // 포구
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(45, 0, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // 하이라이트 (빛 반사)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.beginPath();
+            ctx.roundRect(5, 3, w - 30, 8, 3);
+            ctx.fill();
+
+            // 피격 시 빨간 오버레이
+            if (tank.damaged) {
+                ctx.fillStyle = 'rgba(255, 50, 50, 0.4)';
+                ctx.beginPath();
+                ctx.roundRect(0, 0, w, h - 10, 5);
+                ctx.fill();
+            }
+
+            ctx.restore();
+
+            // HP 바
+            const hpBarWidth = 50;
+            const hpBarX = centerX - hpBarWidth / 2;
+            const hpBarY = tank.y - 35;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.beginPath();
+            ctx.roundRect(hpBarX - 2, hpBarY - 2, hpBarWidth + 4, 12, 4);
+            ctx.fill();
+
+            ctx.fillStyle = '#444';
+            ctx.fillRect(hpBarX, hpBarY, hpBarWidth, 8);
+
+            const hpPercent = tank.lives / 3;
+            const hpColor = hpPercent > 0.6 ? '#4CAF50' : hpPercent > 0.3 ? '#FFC107' : '#F44336';
+            ctx.fillStyle = hpColor;
+            ctx.fillRect(hpBarX, hpBarY, hpBarWidth * hpPercent, 8);
+
+            // 이름
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.strokeText(tank.name, centerX, tank.y - 42);
+            ctx.fillText(tank.name, centerX, tank.y - 42);
+
+            // 내 탱크 표시 (▼ 마커)
+            if (isMyTank) {
+                ctx.fillStyle = '#FFD700';  // 골드색
+                ctx.font = 'bold 16px Arial';
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 3;
+                ctx.strokeText('▼', centerX, tank.y - 55);
+                ctx.fillText('▼', centerX, tank.y - 55);
+            }
+
+            // 쿨다운 표시
+            const now = Date.now();
+            if (tank.cooldown > now) {
+                const remaining = (tank.cooldown - now) / FIRE_COOLDOWN;
+                ctx.fillStyle = 'rgba(255, 150, 0, 0.7)';
+                ctx.fillRect(hpBarX, hpBarY + 10, hpBarWidth * remaining, 4);
+            }
+        }
+
+        // ============ 사운드 시스템 ============
+        let audioCtx = null;
+        let windOscillator = null;
+        let windGain = null;
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioCtx;
+        }
+
+        // 대포 발사음 (클래식 대포 - 둔탁한 쾅! 소리)
+        function playFireSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+
+                // 메인 붐 소리 (깊고 둔탁한 저주파)
+                const osc1 = ctx.createOscillator();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(80, now);
+                osc1.frequency.exponentialRampToValueAtTime(20, now + 0.4);
+
+                const gain1 = ctx.createGain();
+                gain1.gain.setValueAtTime(0.9, now);
+                gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+                // 중간 톤 (울림감)
+                const osc2 = ctx.createOscillator();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(120, now);
+                osc2.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+
+                const gain2 = ctx.createGain();
+                gain2.gain.setValueAtTime(0.5, now);
+                gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+
+                // 화약 폭발 노이즈 (거친 느낌)
+                const bufferSize = ctx.sampleRate * 0.4;
+                const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const noiseData = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    const envelope = Math.exp(-i / (bufferSize * 0.08));
+                    noiseData[i] = (Math.random() * 2 - 1) * envelope;
+                }
+
+                const noiseSource = ctx.createBufferSource();
+                noiseSource.buffer = noiseBuffer;
+
+                const noiseFilter = ctx.createBiquadFilter();
+                noiseFilter.type = 'lowpass';
+                noiseFilter.frequency.setValueAtTime(600, now);
+                noiseFilter.frequency.exponentialRampToValueAtTime(150, now + 0.3);
+
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.6, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+
+                // 잔향 (메아리 효과)
+                const osc3 = ctx.createOscillator();
+                osc3.type = 'sine';
+                osc3.frequency.setValueAtTime(60, now + 0.1);
+                osc3.frequency.exponentialRampToValueAtTime(25, now + 0.6);
+
+                const gain3 = ctx.createGain();
+                gain3.gain.setValueAtTime(0, now);
+                gain3.gain.setValueAtTime(0.3, now + 0.1);
+                gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
+
+                // 연결
+                osc1.connect(gain1); gain1.connect(ctx.destination);
+                osc2.connect(gain2); gain2.connect(ctx.destination);
+                noiseSource.connect(noiseFilter);
+                noiseFilter.connect(noiseGain); noiseGain.connect(ctx.destination);
+                osc3.connect(gain3); gain3.connect(ctx.destination);
+
+                osc1.start(now); osc1.stop(now + 0.5);
+                osc2.start(now); osc2.stop(now + 0.35);
+                noiseSource.start(now);
+                osc3.start(now); osc3.stop(now + 0.7);
+            } catch(e) {}
+        }
+
+        // 폭발 소리 (강력한 임팩트)
+        function playExplosionSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+
+                // 메인 폭발 노이즈
+                const bufferSize = ctx.sampleRate * 0.8;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    const envelope = Math.exp(-i / (bufferSize * 0.15));
+                    data[i] = (Math.random() * 2 - 1) * envelope;
+                }
+
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1000, now);
+                filter.frequency.exponentialRampToValueAtTime(200, now + 0.5);
+
+                // 저주파 붐
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(80, now);
+                osc.frequency.exponentialRampToValueAtTime(20, now + 0.4);
+
+                const oscGain = ctx.createGain();
+                oscGain.gain.setValueAtTime(0.7, now);
+                oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+                // 컴프레서 (펀치감)
+                const compressor = ctx.createDynamicsCompressor();
+                compressor.threshold.value = -20;
+                compressor.knee.value = 10;
+                compressor.ratio.value = 8;
+                compressor.attack.value = 0.001;
+                compressor.release.value = 0.1;
+
+                const masterGain = ctx.createGain();
+                masterGain.gain.value = 0.7;
+
+                source.connect(filter);
+                filter.connect(compressor);
+                osc.connect(oscGain);
+                oscGain.connect(compressor);
+                compressor.connect(masterGain);
+                masterGain.connect(ctx.destination);
+
+                source.start(now);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } catch(e) {}
+        }
+
+        // 탱크 피격음 (금속 충격)
+        function playHitSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+
+                // 금속 충격음
+                const osc1 = ctx.createOscillator();
+                osc1.type = 'square';
+                osc1.frequency.setValueAtTime(400, now);
+                osc1.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+
+                const gain1 = ctx.createGain();
+                gain1.gain.setValueAtTime(0.4, now);
+                gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+                // 공명음
+                const osc2 = ctx.createOscillator();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(600, now);
+
+                const gain2 = ctx.createGain();
+                gain2.gain.setValueAtTime(0.2, now);
+                gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+                // 노이즈 버스트
+                const bufferSize = ctx.sampleRate * 0.1;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.02));
+                }
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.value = 0.3;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.value = 2000;
+
+                osc1.connect(gain1); gain1.connect(ctx.destination);
+                osc2.connect(gain2); gain2.connect(ctx.destination);
+                noise.connect(filter);
+                filter.connect(noiseGain); noiseGain.connect(ctx.destination);
+
+                osc1.start(now); osc1.stop(now + 0.15);
+                osc2.start(now); osc2.stop(now + 0.3);
+                noise.start(now);
+            } catch(e) {}
+        }
+
+        // 승리 사운드
+        function playVictorySound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+
+                const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
+                notes.forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'square';
+                    osc.frequency.value = freq;
+
+                    const gain = ctx.createGain();
+                    gain.gain.setValueAtTime(0, now + i * 0.15);
+                    gain.gain.linearRampToValueAtTime(0.2, now + i * 0.15 + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.15 + 0.3);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + i * 0.15);
+                    osc.stop(now + i * 0.15 + 0.35);
+                });
+            } catch(e) {}
+        }
+
+        // 패배 사운드
+        function playDefeatSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+
+                const notes = [400, 350, 300, 200];
+                notes.forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sawtooth';
+                    osc.frequency.value = freq;
+
+                    const gain = ctx.createGain();
+                    gain.gain.setValueAtTime(0, now + i * 0.2);
+                    gain.gain.linearRampToValueAtTime(0.15, now + i * 0.2 + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.2 + 0.3);
+
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 800;
+
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + i * 0.2);
+                    osc.stop(now + i * 0.2 + 0.35);
+                });
+            } catch(e) {}
+        }
+
+        // 게임 시작 사운드
+        function playGameStartSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+
+                for (let i = 0; i < 6; i++) {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'square';
+                    osc.frequency.value = 200 + i * 50;
+
+                    const gain = ctx.createGain();
+                    gain.gain.setValueAtTime(0, now + i * 0.08);
+                    gain.gain.linearRampToValueAtTime(0.15 + i * 0.03, now + i * 0.08 + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.1);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + i * 0.08);
+                    osc.stop(now + i * 0.08 + 0.15);
+                }
+            } catch(e) {}
+        }
+
+        // 바람 소리 업데이트
+        function updateWindSound() {
+            try {
+                const ctx = getAudioContext();
+                const absWind = Math.abs(wind);
+
+                if (absWind < 1) {
+                    if (windGain) {
+                        windGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+                    }
+                    return;
+                }
+
+                if (!windOscillator) {
+                    const bufferSize = ctx.sampleRate * 2;
+                    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = Math.random() * 2 - 1;
+                    }
+
+                    windOscillator = ctx.createBufferSource();
+                    windOscillator.buffer = buffer;
+                    windOscillator.loop = true;
+
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'bandpass';
+                    filter.frequency.value = 400;
+                    filter.Q.value = 0.5;
+
+                    windGain = ctx.createGain();
+                    windGain.gain.value = 0;
+
+                    windOscillator.connect(filter);
+                    filter.connect(windGain);
+                    windGain.connect(ctx.destination);
+                    windOscillator.start();
+                }
+
+                const targetVolume = Math.min(0.15, absWind * 0.02);
+                windGain.gain.linearRampToValueAtTime(targetVolume, ctx.currentTime + 0.3);
+            } catch(e) {}
+        }
+
+        // 포탄 휘파람 소리
+        function playProjectileSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.linearRampToValueAtTime(400, now + 1.5);
+
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.linearRampToValueAtTime(0.15, now + 0.5);
+                gain.gain.linearRampToValueAtTime(0.01, now + 1.5);
+
+                // 트레몰로 효과
+                const lfo = ctx.createOscillator();
+                lfo.type = 'sine';
+                lfo.frequency.value = 15;
+
+                const lfoGain = ctx.createGain();
+                lfoGain.gain.value = 0.03;
+
+                lfo.connect(lfoGain);
+                lfoGain.connect(gain.gain);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start(now);
+                lfo.start(now);
+                osc.stop(now + 1.5);
+                lfo.stop(now + 1.5);
+            } catch(e) {}
+        }
+
+        // 게임 루프
+        function gameLoop() {
+            updateCamera();
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 오디오 활성화 함수
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            audioUnlocked = true;
+
+            // AudioContext 초기화 및 resume
+            const ctx = getAudioContext();
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+
+            // 이벤트 리스너 제거
+            document.removeEventListener('click', unlockAudio);
+            document.removeEventListener('keydown', unlockAudio);
+            document.removeEventListener('touchstart', unlockAudio);
+
+            // 활성화 확인 사운드 (짧은 틱)
+            try {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.1);
+            } catch(e) {}
+        }
+
+        // 페이지 로드 시 오디오 활성화 리스너 등록
+        document.addEventListener('click', unlockAudio);
+        document.addEventListener('keydown', unlockAudio);
+        document.addEventListener('touchstart', unlockAudio);
+
+        // 이벤트
+        startGameBtn.onclick = () => {
+            unlockAudio();  // PC에서 직접 시작할 때도 오디오 활성화
+            if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({ type: 'multi_start_game' }));
+            }
+        };
+
+        restartBtn.onclick = () => {
+            unlockAudio();  // 재시작 버튼 클릭 시에도 오디오 활성화
+            // 로비로 직접 리셋
+            aiLevel = 1;  // 레벨 초기화
+            resetToLobby();
+
+            // 서버에도 알림 (다른 플레이어들에게 전파)
+            if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({ type: 'multi_restart_game' }));
+            }
+        };
+
+        // 초기화
+        generateTerrain();
+        connect();
+        gameLoop();
+    </script>
+</body>
+</html>

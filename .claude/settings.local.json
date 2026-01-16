@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ngrok http:*)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(python server.py:*)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"\nimport qrcode\n\nbase_url = ''https://unvended-indistinctly-debera.ngrok-free.dev''\npages = [\n    \\(''sensor'', ''달리기''\\),\n    \\(''gun'', ''배틀그라운드''\\),\n    \\(''fortress_phone'', ''포트리스''\\)\n]\n\nfor filename, name in pages:\n    url = f''{base_url}/{filename}.html''\n    qr = qrcode.make\\(url\\)\n    qr.save\\(f''C:/work_station/game/qr_{filename}.png''\\)\n    print\\(f''{name}: qr_{filename}.png''\\)\n\")",
+      "Bash(start C:/work_station/game/qr_sensor.png)",
+      "Bash(start C:/work_station/game/qr_gun.png)",
+      "Bash(start C:/work_station/game/qr_fortress_phone.png)",
+      "Bash(start:*)",
+      "Bash(grep:*)",
+      "Bash(pkill:*)",
+      "Bash(taskkill //F //PID 2160)"
+    ]
+  }
+}

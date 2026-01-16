@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gun Controller</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            height: 100vh;
+            background: #1a1a2e;
+            color: white;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+            user-select: none;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+        }
+
+        #status {
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .connected { background: #28a745; }
+        .disconnected { background: #dc3545; }
+
+        #debugInfo {
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: monospace;
+            width: 100%;
+            max-width: 320px;
+            margin-bottom: 10px;
+        }
+        .row { display: flex; justify-content: space-between; margin: 5px 0; }
+        .val { color: #0f0; font-weight: bold; }
+
+        .btn {
+            width: 100%;
+            max-width: 320px;
+            padding: 18px;
+            font-size: 18px;
+            border: none;
+            border-radius: 12px;
+            color: white;
+            margin: 8px 0;
+            cursor: pointer;
+        }
+        #sensorBtn { background: #007bff; }
+        #sensorBtn.done { background: #28a745; }
+        #zeroBtn { background: #ff9800; }
+
+        .settingBox {
+            width: 100%;
+            max-width: 320px;
+            background: rgba(0,0,0,0.5);
+            padding: 12px;
+            border-radius: 10px;
+            margin: 8px 0;
+        }
+        .settingBox label { display: block; margin-bottom: 8px; font-size: 14px; }
+        .settingBox input[type="range"] { width: 100%; }
+        .settingBox .val { font-size: 20px; display: block; text-align: center; margin-top: 5px; }
+
+        .toggleRow {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 10px;
+        }
+        .toggle { display: flex; align-items: center; gap: 8px; }
+        .toggle input { width: 22px; height: 22px; }
+
+        #fireArea {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 45%;
+            background: linear-gradient(to bottom, transparent, rgba(255,0,0,0.2));
+        }
+        #fireBtn {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #ff4444, #aa0000);
+            border: 5px solid #fff;
+            color: white;
+            font-size: 26px;
+            font-weight: bold;
+        }
+        #ammo {
+            position: absolute;
+            bottom: 190px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 28px;
+            font-weight: bold;
+        }
+        #reloadBtn {
+            position: absolute;
+            bottom: 40px;
+            right: 25px;
+            padding: 15px 20px;
+            background: #ff9800;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="status" class="disconnected">연결 안됨</div>
+
+    <div id="debugInfo">
+        <div class="row"><span>Alpha (좌우):</span><span class="val" id="vAlpha">-</span></div>
+        <div class="row"><span>Beta (상하):</span><span class="val" id="vBeta">-</span></div>
+        <div class="row"><span>---</span><span>---</span></div>
+        <div class="row"><span>X:</span><span class="val" id="vX">50%</span></div>
+        <div class="row"><span>Y:</span><span class="val" id="vY">50%</span></div>
+    </div>
+
+    <button class="btn" id="sensorBtn">1. 센서 시작</button>
+    <button class="btn" id="zeroBtn">2. 영점 (화면 중앙 조준 후 클릭)</button>
+
+    <div class="settingBox">
+        <label>민감도 (낮을수록 둔감)</label>
+        <input type="range" id="sensSlider" min="20" max="150" value="80">
+        <span class="val" id="sensVal">80</span>
+    </div>
+
+    <div class="settingBox">
+        <label>방향 반전</label>
+        <div class="toggleRow">
+            <label class="toggle"><input type="checkbox" id="invX"> X축(좌우)</label>
+            <label class="toggle"><input type="checkbox" id="invY"> Y축(상하)</label>
+        </div>
+    </div>
+
+    <div id="fireArea">
+        <button id="fireBtn">FIRE</button>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const sensorBtn = document.getElementById('sensorBtn');
+        const zeroBtn = document.getElementById('zeroBtn');
+        const sensSlider = document.getElementById('sensSlider');
+        const sensVal = document.getElementById('sensVal');
+        const invX = document.getElementById('invX');
+        const invY = document.getElementById('invY');
+        const fireArea = document.getElementById('fireArea');
+        const fireBtn = document.getElementById('fireBtn');
+
+        const vAlpha = document.getElementById('vAlpha');
+        const vBeta = document.getElementById('vBeta');
+        const vX = document.getElementById('vX');
+        const vY = document.getElementById('vY');
+
+        let ws = null;
+        let sensorOK = false;
+        let zeroOK = false;
+
+        let curAlpha = 0, curBeta = 0;
+        let zeroAlpha = 0, zeroBeta = 0;
+        let sensitivity = 80;
+        let fireInterval = null;  // 연사용
+
+        // WebSocket
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${location.host}/ws`;
+
+        function connect() {
+            ws = new WebSocket(wsUrl);
+            ws.onopen = () => {
+                statusDiv.textContent = '연결됨';
+                statusDiv.className = 'connected';
+                ws.send(JSON.stringify({ type: 'gun' }));
+            };
+            ws.onclose = () => {
+                statusDiv.textContent = '연결 끊김';
+                statusDiv.className = 'disconnected';
+                setTimeout(connect, 3000);
+            };
+        }
+
+        // 센서
+        sensorBtn.onclick = () => {
+            if (sensorOK) return;
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(r => {
+                    if (r === 'granted') startSensor();
+                    else alert('권한 거부');
+                }).catch(e => alert('오류: ' + e));
+            } else {
+                startSensor();
+            }
+        };
+
+        function startSensor() {
+            sensorOK = true;
+            sensorBtn.textContent = '센서 OK ✓';
+            sensorBtn.classList.add('done');
+            window.addEventListener('deviceorientation', onOrient);
+        }
+
+        function onOrient(e) {
+            curAlpha = e.alpha || 0;
+            curBeta = e.beta || 0;
+
+            vAlpha.textContent = curAlpha.toFixed(1);
+            vBeta.textContent = curBeta.toFixed(1);
+
+            if (zeroOK) {
+                const pos = calcPos();
+                vX.textContent = Math.round(pos.x * 100) + '%';
+                vY.textContent = Math.round(pos.y * 100) + '%';
+
+                if (ws && ws.readyState === 1) {
+                    ws.send(JSON.stringify({ type: 'aim', x: pos.x, y: pos.y }));
+                }
+            }
+        }
+
+        // 가장자리 보정 곡선 (중앙은 정확, 가장자리는 가속)
+        function curve(v) {
+            // v: -0.5 ~ 0.5 범위
+            // 가장자리로 갈수록 더 빠르게 이동
+            const sign = v >= 0 ? 1 : -1;
+            const abs = Math.abs(v);
+            return sign * (abs + abs * abs * 1.2);
+        }
+
+        function calcPos() {
+            // Alpha는 0-360 범위라서 차이 계산이 복잡함
+            let dx = curAlpha - zeroAlpha;
+            // 360도 경계 처리
+            if (dx > 180) dx -= 360;
+            if (dx < -180) dx += 360;
+
+            let dy = curBeta - zeroBeta;
+
+            // 민감도 적용
+            let nx = -dx / sensitivity;  // X축 반전
+            let ny = -dy / sensitivity;  // Y축 반전
+
+            // 곡선 보정 적용
+            let x = 0.5 + curve(nx);
+            let y = 0.5 + curve(ny);
+
+            if (invX.checked) x = 1 - x;
+            if (invY.checked) y = 1 - y;
+
+            return {
+                x: Math.max(0, Math.min(1, x)),
+                y: Math.max(0, Math.min(1, y))
+            };
+        }
+
+        // 영점
+        zeroBtn.onclick = () => {
+            if (!sensorOK) { alert('먼저 센서를 시작하세요'); return; }
+            zeroAlpha = curAlpha;
+            zeroBeta = curBeta;
+            zeroOK = true;
+            zeroBtn.textContent = '영점 재설정';
+            fireArea.style.display = 'block';
+
+            if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({ type: 'calibrated' }));
+            }
+        };
+
+        // 민감도
+        sensSlider.oninput = () => {
+            sensitivity = parseInt(sensSlider.value);
+            sensVal.textContent = sensitivity;
+        };
+
+        // 발사
+        function fire() {
+            if (navigator.vibrate) navigator.vibrate(30);
+
+            if (ws && ws.readyState === 1) {
+                const pos = calcPos();
+                ws.send(JSON.stringify({ type: 'fire', x: pos.x, y: pos.y }));
+            }
+        }
+
+        // 연사 시작
+        function startFire() {
+            if (fireInterval) return;
+            fire();  // 첫 발
+            fireInterval = setInterval(fire, 100);  // 0.1초마다 발사
+        }
+
+        // 연사 중지
+        function stopFire() {
+            if (fireInterval) {
+                clearInterval(fireInterval);
+                fireInterval = null;
+            }
+        }
+
+        // 터치/마우스 이벤트
+        fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startFire(); });
+        fireBtn.addEventListener('touchend', stopFire);
+        fireBtn.addEventListener('touchcancel', stopFire);
+        fireBtn.addEventListener('mousedown', startFire);
+        fireBtn.addEventListener('mouseup', stopFire);
+        fireBtn.addEventListener('mouseleave', stopFire);
+
+        connect();
+    </script>
+</body>
+</html>
