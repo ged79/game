@@ -311,30 +311,33 @@ async def init_app():
     return app
 
 def main():
+    # Render 등 클라우드 환경에서는 PORT 환경변수 사용
+    port = int(os.environ.get('PORT', 9000))
+
     print("=" * 50)
     print("통합 서버 시작 (HTTP + WebSocket)")
     print("=" * 50)
-    print("포트: 9000")
+    print(f"포트: {port}")
     print("")
     print("[달리기 게임]")
-    print("  PC: http://localhost:9000/game.html")
+    print(f"  PC: http://localhost:{port}/game.html")
     print("  폰: [ngrok 주소]/sensor.html")
     print("")
     print("[배틀그라운드]")
-    print("  PC: http://localhost:9000/battle.html")
+    print(f"  PC: http://localhost:{port}/battle.html")
     print("  폰: [ngrok 주소]/gun.html")
     print("")
     print("[포트리스 2인용]")
-    print("  PC: http://localhost:9000/fortress.html")
+    print(f"  PC: http://localhost:{port}/fortress.html")
     print("  폰: [ngrok 주소]/fortress_control.html")
     print("")
     print("[포트리스 10인용]")
-    print("  PC: http://localhost:9000/fortress_multi.html")
+    print(f"  PC: http://localhost:{port}/fortress_multi.html")
     print("  폰: [ngrok 주소]/fortress_control_multi.html")
     print("=" * 50)
 
     app = asyncio.run(init_app())
-    web.run_app(app, host='0.0.0.0', port=9000)
+    web.run_app(app, host='0.0.0.0', port=port)
 
 if __name__ == '__main__':
     main()
